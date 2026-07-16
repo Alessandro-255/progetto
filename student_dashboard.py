@@ -1,14 +1,7 @@
 import os
 import shutil
-from database import (get_dati_studente, get_corsi_studente, get_materie_disponibili,
-                      iscrivi_studente_materia, get_appelli_per_studente, prenota_appello_studente,
-                      get_dati_libretto, gestisci_verbalizzazione, cambia_password,
-                      get_stato_dsa, set_stato_dsa, get_materiale_corso)
-from PyQt6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QLabel,
-                             QPushButton, QScrollArea, QGridLayout, QFrame,
-                             QLineEdit, QMessageBox, QStackedWidget, QTableWidget,
-                             QTableWidgetItem, QHeaderView, QProgressBar, QComboBox,
-                             QFileDialog)
+from database import *
+from PyQt6.QtWidgets import *
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 
@@ -446,58 +439,107 @@ class StudentDashboard(QWidget):
         return page
 
     def ricarica_pagina_libretto(self):
+        # 1. Svuotiamo forzatamente le tabelle per garantire un refresh grafico pulito
+        self.tabella_sospesi.clearContents()
+        self.tabella_sospesi.setRowCount(0)
+        self.tabella_superati.clearContents()
+        self.tabella_superati.setRowCount(0)
+
         sospesi, superati = get_dati_libretto(self.id_utente)
+
         tot_voti = 0
         somma_voti_cfu = 0
         tot_cfu = 0
+
+        # 2. Calcolo Statistiche Aggiornato
         for esame in superati:
             voto = esame['voto']
             cfu = esame['cfu']
-            tot_voti += voto
-            somma_voti_cfu += (voto * cfu)
+
+            # Se il voto è 31 (30L), ai fini del calcolo della media matematica vale 30
+            voto_calcolo = 30 if voto > 30 else voto
+
+            tot_voti += voto_calcolo
+            somma_voti_cfu += (voto_calcolo * cfu)
             tot_cfu += cfu
+
         media_arit = (tot_voti / len(superati)) if superati else 0
         media_pond = (somma_voti_cfu / tot_cfu) if tot_cfu > 0 else 0
+
         self.lbl_media_arit.setText(f"MEDIA ARITMETICA:\n{media_arit:.2f}")
         self.lbl_media_pond.setText(f"MEDIA PONDERATA:\n{media_pond:.2f}")
         self.lbl_cfu_text.setText(f"CFU Totali Acquisiti: {tot_cfu} / 180")
         self.progress_cfu.setValue(tot_cfu)
 
+        # 3. Popolamento Tabella Voti In Sospeso
         self.tabella_sospesi.setRowCount(len(sospesi))
         for riga, v in enumerate(sospesi):
             self._inserisci_testo_cella(self.tabella_sospesi, riga, 0, v['materia'])
-            self._inserisci_testo_cella(self.tabella_sospesi, riga, 1, str(v['voto']))
+
+            # Mostra 30L se il professore ha inserito la lode
+            voto_display = "30L" if v['voto'] > 30 else str(v['voto'])
+            self._inserisci_testo_cella(self.tabella_sospesi, riga, 1, voto_display)
+
             box_azioni = QWidget()
             box_azioni_layout = QHBoxLayout(box_azioni)
             box_azioni_layout.setContentsMargins(0, 0, 0, 0)
+
             btn_accetta = QPushButton("✔️ ACCETTA")
             btn_accetta.setStyleSheet("background-color: green; color: white; font-weight: bold;")
             btn_accetta.setCursor(Qt.CursorShape.PointingHandCursor)
             btn_accetta.clicked.connect(lambda ch, id_v=v['id_sospeso']: self._azione_verbalizza(id_v, True))
+
             btn_rifiuta = QPushButton("❌ RIFIUTA")
             btn_rifiuta.setStyleSheet("background-color: red; color: white; font-weight: bold;")
             btn_rifiuta.setCursor(Qt.CursorShape.PointingHandCursor)
             btn_rifiuta.clicked.connect(lambda ch, id_v=v['id_sospeso']: self._azione_verbalizza(id_v, False))
+
             box_azioni_layout.addWidget(btn_accetta)
             box_azioni_layout.addWidget(btn_rifiuta)
             self.tabella_sospesi.setCellWidget(riga, 2, box_azioni)
 
+        # 4. Popolamento Tabella Esami Superati (Testo definitivo)
         self.tabella_superati.setRowCount(len(superati))
         for riga, esame in enumerate(superati):
             self._inserisci_testo_cella(self.tabella_superati, riga, 0, esame['materia'])
+
             voto_str = "30L" if esame['voto'] > 30 else str(esame['voto'])
             self._inserisci_testo_cella(self.tabella_superati, riga, 1, voto_str)
             self._inserisci_testo_cella(self.tabella_superati, riga, 2, str(esame['cfu']))
             self._inserisci_testo_cella(self.tabella_superati, riga, 3, esame['gruppo'])
             self._inserisci_testo_cella(self.tabella_superati, riga, 4, "SI")
 
-    def _azione_verbalizza(self, id_sospeso, accetta):
-        azione = "accettato" if accetta else "rifiutato"
-        if gestisci_verbalizzazione(id_sospeso, accetta):
-            QMessageBox.information(self, "Esito", f"Hai {azione} il voto con successo!")
-            self.ricarica_pagina_libretto()
-            self.ricarica_pagina_home()
+    def _azione_accetta_libretto(self):
+        QMessageBox.information(self, "Info",
+                                "Questo esame è già stato confermato ed è presente nel tuo libretto definitivo.")
 
+    def _azione_rifiuta_libretto(self, id_libretto):
+        risposta = QMessageBox.question(self, "Conferma Rifiuto",
+                                        "Sei sicuro di voler rifiutare ed eliminare questo voto dal libretto?\nL'azione è irreversibile.",
+                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+
+        if risposta == QMessageBox.StandardButton.Yes:
+            if rifiuta_voto_libretto(id_libretto):
+                QMessageBox.information(self, "Successo", "Il voto è stato rifiutato ed eliminato dal libretto.")
+                self.ricarica_pagina_libretto()
+                self.ricarica_pagina_home()
+            else:
+                QMessageBox.critical(self, "Errore", "Si è verificato un problema nella rimozione del voto.")
+
+    def _azione_verbalizza(self, id_sospeso, accetta):
+        azione = "accettare" if accetta else "rifiutare"
+        risposta = QMessageBox.question(self, "Conferma Scelta",
+                                        f"Sei sicuro di voler {azione} questo voto?",
+                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+
+        if risposta == QMessageBox.StandardButton.Yes:
+            if gestisci_verbalizzazione(id_sospeso, accetta):
+                azione_passata = "accettato e registrato" if accetta else "rifiutato"
+                QMessageBox.information(self, "Esito", f"Hai {azione_passata} il voto con successo!")
+
+                # Ricarica immediatamente la pagina per forzare l'aggiornamento visivo di entrambe le tabelle
+                self.ricarica_pagina_libretto()
+                self.ricarica_pagina_home()
     # ==========================
     # PAGINA 4: IMPOSTAZIONI
     # ==========================

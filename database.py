@@ -170,6 +170,8 @@ def get_appelli_per_studente(id_studente):
         connessione = sqlite3.connect(DB_PATH)
         cursore = connessione.cursor()
 
+        # Query aggiornata: esclude le materie già verbalizzate (in Libretto)
+        # e quelle con un voto in attesa di accettazione (in Voto_Da_Verbalizzare)
         query_disp = """
                      SELECT a.ID_APPELLO, m.Nome, a.Data, a.Ora_Inizio, a.Gruppo
                      FROM Appello a
@@ -179,14 +181,15 @@ def get_appelli_per_studente(id_studente):
                        AND a.Data >= date ('now')
                        AND (a.Chiuso = FALSE OR a.Chiuso IS NULL)
                        AND a.ID_APPELLO NOT IN (SELECT COD_APPELLO FROM Prenotazione WHERE COD_STUDENTE = ?)
-                       AND m.ID_MATERIA NOT IN (SELECT app.COD_MATERIA FROM Libretto l JOIN Appello app ON l.COD_APPELLO = app.ID_APPELLO WHERE l.COD_STUDENTE = ?) \
+                       AND m.ID_MATERIA NOT IN (SELECT app.COD_MATERIA FROM Libretto l JOIN Appello app ON l.COD_APPELLO = app.ID_APPELLO WHERE l.COD_STUDENTE = ?)
+                       AND m.ID_MATERIA NOT IN (SELECT app.COD_MATERIA FROM Voto_Da_Verbalizzare v JOIN Appello app ON v.COD_APPELLO = app.ID_APPELLO WHERE v.COD_STUDENTE = ?) \
                      """
-        cursore.execute(query_disp, (id_studente, id_studente, id_studente))
+        # Passiamo id_studente 4 volte per i rispettivi segnaposto "?"
+        cursore.execute(query_disp, (id_studente, id_studente, id_studente, id_studente))
         for r in cursore.fetchall():
             disponibili.append(
                 {"id_appello": r[0], "materia": r[1], "data": r[2], "ora": r[3], "gruppo": "SI" if r[4] else "NO"})
 
-        # MODIFICA: Aggiunto filtro (a.Chiuso = FALSE OR a.Chiuso IS NULL) per rimuovere gli appelli chiusi dalle prenotazioni dello studente
         query_pren = """
                      SELECT a.ID_APPELLO, m.Nome, a.Data, a.Ora_Inizio
                      FROM Prenotazione p
@@ -236,19 +239,35 @@ def get_dati_libretto(id_studente):
         for r in cursore.fetchall():
             da_verbalizzare.append({"id_sospeso": r[0], "materia": r[1], "voto": r[2]})
 
+        # MODIFICA QUI: Aggiunto l.ID_Libretto alla SELECT
         cursore.execute("""
-                        SELECT m.Nome, l.Voto, m.Numero_CFU, a.Gruppo
+                        SELECT m.Nome, l.Voto, m.Numero_CFU, a.Gruppo, l.ID_Libretto
                         FROM Libretto l
                                  JOIN Appello a ON l.COD_APPELLO = a.ID_APPELLO
                                  JOIN Materia m ON a.COD_MATERIA = m.ID_MATERIA
                         WHERE l.COD_STUDENTE = ?
                         """, (id_studente,))
         for r in cursore.fetchall():
-            superati.append({"materia": r[0], "voto": r[1], "cfu": r[2], "gruppo": "SI" if r[3] else "NO"})
+            superati.append({"materia": r[0], "voto": r[1], "cfu": r[2], "gruppo": "SI" if r[3] else "NO", "id_libretto": r[4]})
 
         return da_verbalizzare, superati
     except sqlite3.Error:
         return [], []
+    finally:
+        if connessione: connessione.close()
+
+# NUOVA FUNZIONE: per eliminare un voto già presente nel libretto
+def rifiuta_voto_libretto(id_libretto):
+    connessione = None
+    try:
+        connessione = sqlite3.connect(DB_PATH)
+        cursore = connessione.cursor()
+        cursore.execute("DELETE FROM Libretto WHERE ID_Libretto = ?", (id_libretto,))
+        connessione.commit()
+        return True
+    except sqlite3.Error as e:
+        print(f"Errore rimozione libretto: {e}")
+        return False
     finally:
         if connessione: connessione.close()
 

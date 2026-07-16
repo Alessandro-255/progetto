@@ -339,6 +339,159 @@ class DialogGestisciTutor(QDialog):
 
 
 # ==========================================
+# POPUP (QDIALOG) PER LA REGISTRAZIONE VOTI E CHIUSURA APPELLO
+# ==========================================
+class DialogChiusuraAppello(QDialog):
+    def __init__(self, id_appello, nome_materia, parent=None):
+        super().__init__(parent)
+        self.id_appello = id_appello
+        self.nome_materia = nome_materia
+        self.setWindowTitle(f"Registrazione Voti - {nome_materia}")
+        self.resize(600, 450)
+
+        self.studenti_iscritti = []
+
+        layout = QVBoxLayout(self)
+
+        lbl_titolo = QLabel(f"Registrazione voti per l'appello di:<br><b>{nome_materia.upper()}</b>")
+        lbl_titolo.setFont(QFont("Arial", 11))
+        layout.addWidget(lbl_titolo)
+        layout.addSpacing(10)
+
+        self.tabella_iscritti = QTableWidget()
+        self.tabella_iscritti.setColumnCount(3)
+        self.tabella_iscritti.setHorizontalHeaderLabels(["MATRICOLA", "STUDENTE", "VOTO DA ASSEGNARE"])
+        self.tabella_iscritti.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.tabella_iscritti.setStyleSheet("background-color: white; color: black; border: 1px solid #ccc;")
+        layout.addWidget(self.tabella_iscritti)
+
+        self.lbl_nessun_iscritto = QLabel("Nessuno studente si è prenotato a questo appello.")
+        self.lbl_nessun_iscritto.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        self.lbl_nessun_iscritto.setStyleSheet("color: #D32F2F;")
+        self.lbl_nessun_iscritto.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_nessun_iscritto.hide()
+        layout.addWidget(self.lbl_nessun_iscritto)
+
+        layout.addSpacing(15)
+
+        self.btn_conferma = QPushButton("SALVA VOTI E CHIUDI APPELLO")
+        self.btn_conferma.setStyleSheet(
+            "background-color: #20B2AA; color: white; font-weight: bold; padding: 12px; border-radius: 4px;")
+        self.btn_conferma.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_conferma.clicked.connect(self.registra_e_chiudi)
+        layout.addWidget(self.btn_conferma)
+
+        self.carica_studenti_prenotati()
+
+    def carica_studenti_prenotati(self):
+        import sqlite3
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cur = conn.cursor()
+            query = """
+                SELECT s.ID_STUDENTE, u.Nome, u.Cognome, s.Matricola
+                FROM Prenotazione p
+                JOIN Studente s ON p.COD_STUDENTE = s.ID_STUDENTE
+                JOIN Utente u ON s.ID_STUDENTE = u.ID_UTENTE
+                WHERE p.COD_APPELLO = ?
+            """
+            cur.execute(query, (self.id_appello,))
+            self.studenti_iscritti = cur.fetchall()
+            conn.close()
+
+            if not self.studenti_iscritti:
+                self.tabella_iscritti.hide()
+                self.lbl_nessun_iscritto.show()
+                self.btn_conferma.setText("CHIUDI APPELLO (SENZA ISCRITTI)")
+                return
+
+            self.tabella_iscritti.setRowCount(len(self.studenti_iscritti))
+            self.combo_voti = []
+
+            for riga, studente in enumerate(self.studenti_iscritti):
+                id_studente, nome, cognome, matricola = studente
+
+                # Cella Matricola
+                item_mat = QTableWidgetItem(matricola)
+                item_mat.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                item_mat.setFlags(Qt.ItemFlag.ItemIsEnabled)
+                self.tabella_iscritti.setItem(riga, 0, item_mat)
+
+                # Cella Nome Cognome
+                item_nome = QTableWidgetItem(f"{nome} {cognome}")
+                item_nome.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                item_nome.setFlags(Qt.ItemFlag.ItemIsEnabled)
+                self.tabella_iscritti.setItem(riga, 1, item_nome)
+
+                # ComboBox Voto
+                combo = QComboBox()
+                combo.setStyleSheet("background-color: white; color: black; padding: 4px;")
+                combo.addItem("Respinto", "Respinto")
+                for v in range(18, 31):
+                    combo.addItem(str(v), v)
+                combo.addItem("30L", 31) # 31 rappresenta 30L nel libretto
+                combo.setCurrentIndex(13) # Default su "30"
+                self.tabella_iscritti.setCellWidget(riga, 2, combo)
+                self.combo_voti.append(combo)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Errore", f"Impossibile caricare gli iscritti:\n{e}")
+
+    def registra_e_chiudi(self):
+        import sqlite3
+        risposta = QMessageBox.question(self, "Conferma Chiusura",
+                                        "Sei sicuro di voler chiudere l'appello e registrare i voti assegnati?\n"
+                                        "L'operazione non è revocabile.",
+                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if risposta != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cur = conn.cursor()
+
+            if self.studenti_iscritti:
+                for riga, studente in enumerate(self.studenti_iscritti):
+                    id_studente, nome, cognome, matricola = studente
+                    combo = self.combo_voti[riga]
+                    voto_selezionato = combo.currentData()
+
+                    if voto_selezionato == "Respinto":
+                        # Inseriamo solo l'esito negativo
+                        cur.execute(
+                            "INSERT INTO Esito_Appello_Studente (COD_APPELLO, COD_STUDENTE, Voto_Ottenuto, Stato) VALUES (?, ?, NULL, 'Respinto')",
+                            (self.id_appello, id_studente)
+                        )
+                    else:
+                        voto_num = int(voto_selezionato)
+                        # Inseriamo nei voti da verbalizzare (lo studente deciderà se accettarlo o meno)
+                        cur.execute(
+                            "INSERT INTO Voto_Da_Verbalizzare (COD_STUDENTE, COD_APPELLO, Voto_Proposto) VALUES (?, ?, ?)",
+                            (id_studente, self.id_appello, voto_num)
+                        )
+                        # Inseriamo l'esito positivo
+                        cur.execute(
+                            "INSERT INTO Esito_Appello_Studente (COD_APPELLO, COD_STUDENTE, Voto_Ottenuto, Stato) VALUES (?, ?, ?, 'Superato')",
+                            (self.id_appello, id_studente, voto_num)
+                        )
+
+                    # Rimuoviamo la prenotazione dello studente dato che l'appello è concluso
+                    cur.execute("DELETE FROM Prenotazione WHERE COD_STUDENTE = ? AND COD_APPELLO = ?", (id_studente, self.id_appello))
+
+            # Chiudiamo l'appello
+            cur.execute("UPDATE Appello SET Chiuso = TRUE WHERE ID_APPELLO = ?", (self.id_appello,))
+
+            conn.commit()
+            conn.close()
+
+            QMessageBox.information(self, "Successo", "Voti registrati e appello chiuso con successo!")
+            self.accept()
+
+        except Exception as e:
+            QMessageBox.critical(self, "Errore", f"Si è verificato un errore durante il salvataggio dei voti:\n{e}")
+
+
+# ==========================================
 # POPUP (QDIALOG) PER VISUALIZZARE STATISTICHE APPELLO CHIUSO
 # ==========================================
 class DialogStatisticheAppello(QDialog):
@@ -975,7 +1128,7 @@ class ProfessorDashboard(QWidget):
         btn_indietro.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_indietro.clicked.connect(lambda: self.cambia_pagina(0, list(self.menu_buttons.keys())[0]))
 
-        # BOTTONE GESTISCI TUTOR (NUOVO)
+        # BOTTONE GESTISCI TUTOR
         btn_tutor = QPushButton("👥 GESTISCI TUTOR")
         btn_tutor.setStyleSheet(
             "background-color: #6A5ACD; color: white; padding: 10px; font-weight: bold; border-radius: 5px;")

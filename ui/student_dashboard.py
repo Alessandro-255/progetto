@@ -1,5 +1,6 @@
 import os
 import shutil
+import sqlite3
 from database import *
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -23,6 +24,10 @@ class StudentDashboard(QWidget):
         self.nome = nome
         self.cognome = cognome
         self.matricola = get_dati_studente(id_utente)
+
+        # ORA RICHIAMA DIRETTAMENTE LA TUA FUNZIONE
+        self.corso_laurea = self.get_corso_laurea()
+
         self.setWindowTitle("Dashboard Studente - Gestionale UNIVPM")
         self.setMinimumSize(1100, 700)
         self.menu_buttons = {}
@@ -52,11 +57,20 @@ class StudentDashboard(QWidget):
 
         lbl_matricola = QLabel(self.matricola)
         lbl_matricola.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl_matricola.setStyleSheet("border: none; color: #666; margin-bottom: 20px;")
+        lbl_matricola.setStyleSheet("border: none; color: #666;")  # <--- Nota: ho rimosso il margin-bottom qui
+
+        # --- INIZIO NUOVO BLOCCO CORSO ---
+        lbl_corso = QLabel(self.corso_laurea.upper())
+        lbl_corso.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl_corso.setFont(QFont("Arial", 8, QFont.Weight.Bold))
+        lbl_corso.setStyleSheet("border: none; color: #0055A4; margin-bottom: 20px;")
+        lbl_corso.setWordWrap(True)  # Se il nome del corso è lungo, andrà a capo
+        # --- FINE NUOVO BLOCCO CORSO ---
 
         sidebar_layout.addWidget(lbl_icona)
         sidebar_layout.addWidget(lbl_nome)
         sidebar_layout.addWidget(lbl_matricola)
+        sidebar_layout.addWidget(lbl_corso)  # <--- NUOVA RIGA: aggiunta dell'etichetta al layout laterale
 
         # 2. GESTORE PAGINE
         self.stacked_widget = QStackedWidget()
@@ -268,7 +282,12 @@ class StudentDashboard(QWidget):
 
     def esegui_download_reale(self, path_relativo_db):
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        percorso_sorgente = os.path.join(base_dir, path_relativo_db)
+
+        # FIX: Aggiunto ".." per uscire dalla cartella 'ui' e andare nella root del progetto
+        percorso_sorgente = os.path.join(base_dir, "..", path_relativo_db)
+
+        # Opzionale ma consigliato: normalizza il path per uniformare gli slash (\ e /) su Windows
+        percorso_sorgente = os.path.normpath(percorso_sorgente)
 
         if not os.path.exists(percorso_sorgente):
             QMessageBox.critical(self, "Errore di Sistema",
@@ -508,6 +527,22 @@ class StudentDashboard(QWidget):
             self._inserisci_testo_cella(self.tabella_superati, riga, 2, str(esame['cfu']))
             self._inserisci_testo_cella(self.tabella_superati, riga, 3, esame['gruppo'])
             self._inserisci_testo_cella(self.tabella_superati, riga, 4, "SI")
+
+    def get_corso_laurea(self):
+        with sqlite3.connect(DB_PATH) as conn:
+            cur = conn.cursor()
+            query = """
+                    SELECT c.Nome
+                    FROM Corso_Studente cs
+                             JOIN Corso c ON cs.COD_CORSO = c.ID_CORSO
+                    WHERE cs.COD_STUDENTE = ? \
+                    """
+            cur.execute(query, (self.id_utente,))
+            res = cur.fetchall()
+            if res:
+                # Se è iscritto a più corsi li unisce con " / ", altrimenti stampa l'unico trovato
+                return " / ".join([r[0] for r in res])
+            return "Nessun Corso Assegnato"
 
     def _azione_accetta_libretto(self):
         QMessageBox.information(self, "Info",

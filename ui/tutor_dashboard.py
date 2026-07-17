@@ -342,11 +342,14 @@ class TutorDashboard(QWidget):
         path_relativo = get_path_materiale(id_materiale)
         if path_relativo:
             base_dir = os.path.dirname(os.path.abspath(__file__))
-            path_assoluto = os.path.join(base_dir, path_relativo.replace('/', os.sep))
+            # FIX: Aggiunto ".." anche per l'eliminazione fisica del file
+            path_assoluto = os.path.join(base_dir, "..", path_relativo.replace('/', os.sep))
+            path_assoluto = os.path.normpath(path_assoluto)
+
             if os.path.exists(path_assoluto):
                 try:
                     os.remove(path_assoluto)
-                except Exception:
+                except Exception as e:
                     pass
 
         elimina_materiale_corso(id_materiale)

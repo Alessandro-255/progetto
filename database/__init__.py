@@ -55,6 +55,8 @@ def rifiuta_voto_libretto(id_libretto):
         return True
     except sqlite3.Error:
         return False
+def get_corso_laurea_studente(id_utente):
+    return Studente(id_utente, "", "", "", None).get_corso_laurea()
 
 def get_stato_dsa(id_utente):
     with sqlite3.connect(DB_PATH) as conn:

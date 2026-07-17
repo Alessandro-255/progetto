@@ -128,7 +128,7 @@ class DialogCreaAppello(QDialog):
         super().__init__(parent)
         self.id_materia = id_materia
         self.setWindowTitle(f"Crea Appello - {nome_materia}")
-        self.setFixedSize(400, 300)
+        self.setFixedSize(450, 350)  # Aumentato leggermente per i nuovi campi
 
         layout = QVBoxLayout(self)
 
@@ -147,16 +147,24 @@ class DialogCreaAppello(QDialog):
         self.input_ora = QLineEdit()
         self.input_ora.setPlaceholderText("Es: 09:30")
 
-        self.combo_aula = QComboBox()
-        self.carica_aule_db()
-
         self.input_desc = QLineEdit()
         self.input_desc.setPlaceholderText("Es: Appello Sessione Estiva")
 
+        # --- NUOVO CAMPO: CAPACITÀ DESIDERATA ---
+        self.input_capacita = QSpinBox()
+        self.input_capacita.setRange(0, 1000)
+        self.input_capacita.setSpecialValueText("0 (Qualsiasi/Usa capienza aula)")
+        # Quando l'utente cambia il valore, aggiorniamo il menu delle aule in tempo reale
+        self.input_capacita.valueChanged.connect(self.carica_aule_db)
+
+        self.combo_aula = QComboBox()
+        self.carica_aule_db()  # Caricamento iniziale
+
         form_layout.addRow("Data Esame:", self.input_data)
         form_layout.addRow("Ora Inizio:", self.input_ora)
-        form_layout.addRow("Aula:", self.combo_aula)
         form_layout.addRow("Descrizione:", self.input_desc)
+        form_layout.addRow("Capacità Desiderata:", self.input_capacita)
+        form_layout.addRow("Aula (Filtro automatico):", self.combo_aula)
 
         layout.addLayout(form_layout)
         layout.addSpacing(15)
@@ -170,27 +178,60 @@ class DialogCreaAppello(QDialog):
         layout.addWidget(btn_conferma)
 
     def carica_aule_db(self):
+        """Carica o ricarica le aule in base alla capacità desiderata"""
+        self.combo_aula.clear()
+        capacita_richiesta = self.input_capacita.value()
+
         import sqlite3
         try:
             connessione = sqlite3.connect(DB_PATH)
             cursore = connessione.cursor()
-            cursore.execute("SELECT ID_AULA, Nome FROM Aula_Appello")
-            for r in cursore.fetchall():
-                self.combo_aula.addItem(r[1], r[0])
+
+            # Se ha inserito una capacità, filtriamo le aule adatte
+            if capacita_richiesta > 0:
+                cursore.execute(
+                    "SELECT ID_AULA, Nome, Capienza FROM Aula_Appello WHERE Capienza >= ? ORDER BY Capienza ASC",
+                    (capacita_richiesta,))
+            else:
+                cursore.execute("SELECT ID_AULA, Nome, Capienza FROM Aula_Appello ORDER BY Nome ASC")
+
+            risultati = cursore.fetchall()
+
+            if not risultati:
+                self.combo_aula.addItem("-- Nessuna aula capiente --", None)
+            else:
+                for r in risultati:
+                    # Mostriamo il nome e la capienza, ma nel 'data' salviamo una tupla: (id_aula, capienza_aula)
+                    testo = f"{r[1]} (Capienza max: {r[2]})"
+                    self.combo_aula.addItem(testo, (r[0], r[2]))
+
             connessione.close()
         except Exception as e:
             print(f"Errore caricamento aule: {e}")
-            self.combo_aula.addItem("Aula Magna (Default)", 1)
+            self.combo_aula.addItem("Errore caricamento", None)
 
     def salva_appello(self):
         data_esame = self.input_data.date().toString("yyyy-MM-dd")
         ora = self.input_ora.text().strip()
-        id_aula = self.combo_aula.currentData()
         descrizione = self.input_desc.text().strip()
+
+        dati_combo = self.combo_aula.currentData()
 
         if not ora:
             QMessageBox.warning(self, "Attenzione", "Inserisci l'orario di inizio dell'appello.")
             return
+
+        if dati_combo is None:
+            QMessageBox.warning(self, "Attenzione", "Nessuna aula valida selezionata o aula troppo piccola.")
+            return
+
+        id_aula, capienza_aula = dati_combo
+        capacita_richiesta = self.input_capacita.value()
+
+        # LOGICA DEL LIMITE:
+        # Se prof ha inserito la capacità -> limite = capacità inserita.
+        # Altrimenti -> limite = capienza totale dell'aula.
+        limite_iscrizioni = capacita_richiesta if capacita_richiesta > 0 else capienza_aula
 
         import sqlite3
         try:
@@ -198,17 +239,61 @@ class DialogCreaAppello(QDialog):
             cursore = connessione.cursor()
 
             desc_finale = descrizione if descrizione else f"Appello {data_esame}"
+
+            # Modificato per includere Limite_Iscritti
             cursore.execute(
-                "INSERT INTO Appello (Data, Ora_Inizio, Ora_Fine, Descrizione, Gruppo, Chiuso, COD_MATERIA, COD_AULA_APPELLO) VALUES (?, ?, ?, ?, ?, FALSE, ?, ?)",
-                (data_esame, ora, "12:00:00", desc_finale, False, self.id_materia, id_aula)
+                "INSERT INTO Appello (Data, Ora_Inizio, Ora_Fine, Descrizione, Gruppo, Chiuso, COD_MATERIA, COD_AULA_APPELLO, Limite_Iscritti) VALUES (?, ?, ?, ?, ?, FALSE, ?, ?, ?)",
+                (data_esame, ora, "12:00:00", desc_finale, False, self.id_materia, id_aula, limite_iscrizioni)
             )
             connessione.commit()
             connessione.close()
 
-            QMessageBox.information(self, "Successo", "Appello creato e salvato con successo nel sistema!")
+            QMessageBox.information(self, "Successo",
+                                    f"Appello creato!\nLimite massimo iscritti: {limite_iscrizioni}")
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Errore DB", f"Impossibile salvare l'appello:\n{e}")
+
+def carica_aule_db(self):
+    import sqlite3
+    try:
+        connessione = sqlite3.connect(DB_PATH)
+        cursore = connessione.cursor()
+        cursore.execute("SELECT ID_AULA, Nome FROM Aula_Appello")
+        for r in cursore.fetchall():
+            self.combo_aula.addItem(r[1], r[0])
+        connessione.close()
+    except Exception as e:
+        print(f"Errore caricamento aule: {e}")
+        self.combo_aula.addItem("Aula Magna (Default)", 1)
+
+def salva_appello(self):
+    data_esame = self.input_data.date().toString("yyyy-MM-dd")
+    ora = self.input_ora.text().strip()
+    id_aula = self.combo_aula.currentData()
+    descrizione = self.input_desc.text().strip()
+
+    if not ora:
+        QMessageBox.warning(self, "Attenzione", "Inserisci l'orario di inizio dell'appello.")
+        return
+
+    import sqlite3
+    try:
+        connessione = sqlite3.connect(DB_PATH)
+        cursore = connessione.cursor()
+
+        desc_finale = descrizione if descrizione else f"Appello {data_esame}"
+        cursore.execute(
+            "INSERT INTO Appello (Data, Ora_Inizio, Ora_Fine, Descrizione, Gruppo, Chiuso, COD_MATERIA, COD_AULA_APPELLO) VALUES (?, ?, ?, ?, ?, FALSE, ?, ?)",
+            (data_esame, ora, "12:00:00", desc_finale, False, self.id_materia, id_aula)
+        )
+        connessione.commit()
+        connessione.close()
+
+        QMessageBox.information(self, "Successo", "Appello creato e salvato con successo nel sistema!")
+        self.accept()
+    except Exception as e:
+        QMessageBox.critical(self, "Errore DB", f"Impossibile salvare l'appello:\n{e}")
 
 
 # ==========================================
@@ -402,12 +487,12 @@ class DialogChiusuraAppello(QDialog):
             conn = sqlite3.connect(DB_PATH)
             cur = conn.cursor()
             query = """
-                SELECT s.ID_STUDENTE, u.Nome, u.Cognome, s.Matricola
-                FROM Prenotazione p
-                JOIN Studente s ON p.COD_STUDENTE = s.ID_STUDENTE
-                JOIN Utente u ON s.ID_STUDENTE = u.ID_UTENTE
-                WHERE p.COD_APPELLO = ?
-            """
+                    SELECT s.ID_STUDENTE, u.Nome, u.Cognome, s.Matricola
+                    FROM Prenotazione p
+                             JOIN Studente s ON p.COD_STUDENTE = s.ID_STUDENTE
+                             JOIN Utente u ON s.ID_STUDENTE = u.ID_UTENTE
+                    WHERE p.COD_APPELLO = ? \
+                    """
             cur.execute(query, (self.id_appello,))
             self.studenti_iscritti = cur.fetchall()
             conn.close()

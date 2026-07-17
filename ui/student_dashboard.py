@@ -1,10 +1,15 @@
 import os
 import shutil
 import sqlite3
-from database import *
+import re
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
+
+# Importiamo l'architettura OOP
+from database.core import DB_PATH
+from database.studente import Studente
+
 
 # --- CLASSE PERSONALIZZATA PER RENDERE CLICCABILI I QUADRATI ---
 class ClickableFrame(QFrame):
@@ -15,23 +20,45 @@ class ClickableFrame(QFrame):
         super().mousePressEvent(event)
 
 
-# ---------------------------------------------------------------
+# ===============================================================
 
 class StudentDashboard(QWidget):
     def __init__(self, id_utente, nome, cognome):
         super().__init__()
-        self.id_utente = id_utente
-        self.nome = nome
-        self.cognome = cognome
-        self.matricola = get_dati_studente(id_utente)
 
-        # ORA RICHIAMA DIRETTAMENTE LA TUA FUNZIONE
+        # Recuperiamo matricola e dsa dal DB per inizializzare l'oggetto Studente
+        matricola = ""
+        dsa = None
+        with sqlite3.connect(DB_PATH) as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT Matricola, DSA FROM Studente WHERE ID_STUDENTE = ?", (id_utente,))
+            res = cur.fetchone()
+            if res:
+                matricola, dsa = res
+
+        # Inizializziamo l'oggetto Studente (OOP)
+        self.studente = Studente(id_utente, nome, cognome, matricola, dsa)
         self.corso_laurea = self.get_corso_laurea()
 
         self.setWindowTitle("Dashboard Studente - Gestionale UNIVPM")
         self.setMinimumSize(1100, 700)
         self.menu_buttons = {}
         self._inizializza_ui()
+
+    def get_corso_laurea(self):
+        with sqlite3.connect(DB_PATH) as conn:
+            cur = conn.cursor()
+            query = """
+                    SELECT c.Nome
+                    FROM Corso_Studente cs
+                             JOIN Corso c ON cs.COD_CORSO = c.ID_CORSO
+                    WHERE cs.COD_STUDENTE = ?
+                    """
+            cur.execute(query, (self.studente.id_utente,))
+            res = cur.fetchall()
+            if res:
+                return " / ".join([r[0] for r in res])
+            return "NESSUN CORSO ASSEGNATO"
 
     def _inizializza_ui(self):
         main_layout = QHBoxLayout()
@@ -50,27 +77,25 @@ class StudentDashboard(QWidget):
         lbl_icona.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_icona.setStyleSheet("border: none; margin-top: 20px; color: black;")
 
-        lbl_nome = QLabel(f"STUD {self.nome.upper()} {self.cognome.upper()}")
+        lbl_nome = QLabel(f"STUD {self.studente.nome.upper()} {self.studente.cognome.upper()}")
         lbl_nome.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_nome.setFont(QFont("Arial", 10, QFont.Weight.Bold))
         lbl_nome.setStyleSheet("border: none; color: black;")
 
-        lbl_matricola = QLabel(self.matricola)
+        lbl_matricola = QLabel(self.studente.matricola)
         lbl_matricola.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl_matricola.setStyleSheet("border: none; color: #666;")  # <--- Nota: ho rimosso il margin-bottom qui
+        lbl_matricola.setStyleSheet("border: none; color: #666;")
 
-        # --- INIZIO NUOVO BLOCCO CORSO ---
         lbl_corso = QLabel(self.corso_laurea.upper())
         lbl_corso.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_corso.setFont(QFont("Arial", 8, QFont.Weight.Bold))
         lbl_corso.setStyleSheet("border: none; color: #0055A4; margin-bottom: 20px;")
-        lbl_corso.setWordWrap(True)  # Se il nome del corso è lungo, andrà a capo
-        # --- FINE NUOVO BLOCCO CORSO ---
+        lbl_corso.setWordWrap(True)
 
         sidebar_layout.addWidget(lbl_icona)
         sidebar_layout.addWidget(lbl_nome)
         sidebar_layout.addWidget(lbl_matricola)
-        sidebar_layout.addWidget(lbl_corso)  # <--- NUOVA RIGA: aggiunta dell'etichetta al layout laterale
+        sidebar_layout.addWidget(lbl_corso)
 
         # 2. GESTORE PAGINE
         self.stacked_widget = QStackedWidget()
@@ -83,12 +108,12 @@ class StudentDashboard(QWidget):
         self.pagina_impostazioni = self._crea_pagina_impostazioni()
         self.pagina_materiale = self._crea_pagina_materiale()
 
-        self.stacked_widget.addWidget(self.pagina_home)  # 0
-        self.stacked_widget.addWidget(self.pagina_corsi)  # 1
-        self.stacked_widget.addWidget(self.pagina_appelli)  # 2
-        self.stacked_widget.addWidget(self.pagina_libretto)  # 3
-        self.stacked_widget.addWidget(self.pagina_impostazioni)  # 4
-        self.stacked_widget.addWidget(self.pagina_materiale)  # 5
+        self.stacked_widget.addWidget(self.pagina_home)
+        self.stacked_widget.addWidget(self.pagina_corsi)
+        self.stacked_widget.addWidget(self.pagina_appelli)
+        self.stacked_widget.addWidget(self.pagina_libretto)
+        self.stacked_widget.addWidget(self.pagina_impostazioni)
+        self.stacked_widget.addWidget(self.pagina_materiale)
 
         menu_items = [
             ("🏠 HOME", 0),
@@ -162,9 +187,11 @@ class StudentDashboard(QWidget):
         lbl.setFont(QFont("Arial", 14, QFont.Weight.Bold))
         lbl.setStyleSheet("color: black;")
         self.layout_home.addWidget(lbl)
+
         self.scroll_home = QScrollArea()
         self.scroll_home.setWidgetResizable(True)
         self.scroll_home.setStyleSheet("border: none; background-color: transparent;")
+
         self.contenitore_card_home = QWidget()
         self.griglia_home = QGridLayout(self.contenitore_card_home)
         self.griglia_home.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -177,7 +204,8 @@ class StudentDashboard(QWidget):
             w = self.griglia_home.itemAt(i).widget()
             self.griglia_home.removeWidget(w)
             w.setParent(None)
-        corsi = get_corsi_studente(self.id_utente)
+
+        corsi = self.studente.get_corsi_attivi()
         if not corsi:
             lbl = QLabel("Non hai corsi in sospeso. Ottimo lavoro!")
             lbl.setStyleSheet("color: black;")
@@ -188,7 +216,8 @@ class StudentDashboard(QWidget):
                 card = ClickableFrame()
                 card.setFixedSize(250, 200)
                 card.setCursor(Qt.CursorShape.PointingHandCursor)
-                card.setStyleSheet("background-color: white; border-radius: 5px; padding: 10px; color: black;")
+                card.setStyleSheet(
+                    "background-color: white; border-radius: 5px; padding: 10px; color: black; border: 1px solid #ccc;")
 
                 card.clicked.connect(
                     lambda id_m=corso['id_materia'], nome_m=corso['nome_materia']: self.apri_pagina_materiale(id_m,
@@ -196,11 +225,11 @@ class StudentDashboard(QWidget):
 
                 lo = QVBoxLayout(card)
                 lo.addWidget(QLabel(
-                    f"<b>{corso['nome_materia'].upper()}</b><br><br>CFU: {corso['cfu']}<br><span style='color:green;'>IN CORSO</span>"))
+                    f"<b>{corso['nome_materia'].upper()}</b><br><br>CFU: {corso['cfu']}<br><span style='color:green; font-weight:bold;'>IN CORSO</span>"))
                 self.griglia_home.addWidget(card, r, c)
                 c += 1
                 if c >= 3:
-                    c = 0;
+                    c = 0
                     r += 1
 
     # ==========================
@@ -248,7 +277,12 @@ class StudentDashboard(QWidget):
                 self.layout_lista_materiale.removeWidget(w)
                 w.setParent(None)
 
-        materiali = get_materiale_corso(id_materia)
+        materiali = []
+        with sqlite3.connect(DB_PATH) as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT ID_MATERIALE, Path_File FROM Materiale WHERE COD_MATERIA = ?", (id_materia,))
+            for r in cur.fetchall():
+                materiali.append({"id": r[0], "file": r[1]})
 
         if not materiali:
             lbl = QLabel("Non c'è ancora nessun materiale caricato dal professore per questo corso.")
@@ -257,7 +291,8 @@ class StudentDashboard(QWidget):
         else:
             for mat in materiali:
                 riga_file = QFrame()
-                riga_file.setStyleSheet("background-color: white; border-radius: 5px; padding: 10px;")
+                riga_file.setStyleSheet(
+                    "background-color: white; border-radius: 5px; padding: 10px; border: 1px solid #ccc;")
                 ly = QHBoxLayout(riga_file)
 
                 nome_file_pulito = os.path.basename(mat['file'])
@@ -269,7 +304,6 @@ class StudentDashboard(QWidget):
                     "background-color: #20B2AA; color: white; padding: 8px; font-weight: bold; border-radius: 4px;")
                 btn_scarica.setCursor(Qt.CursorShape.PointingHandCursor)
                 btn_scarica.setFixedWidth(100)
-
                 btn_scarica.clicked.connect(lambda ch, f_path=mat['file']: self.esegui_download_reale(f_path))
 
                 ly.addWidget(lbl_nome)
@@ -282,26 +316,16 @@ class StudentDashboard(QWidget):
 
     def esegui_download_reale(self, path_relativo_db):
         base_dir = os.path.dirname(os.path.abspath(__file__))
-
-        # FIX: Aggiunto ".." per uscire dalla cartella 'ui' e andare nella root del progetto
         percorso_sorgente = os.path.join(base_dir, "..", path_relativo_db)
-
-        # Opzionale ma consigliato: normalizza il path per uniformare gli slash (\ e /) su Windows
         percorso_sorgente = os.path.normpath(percorso_sorgente)
 
         if not os.path.exists(percorso_sorgente):
             QMessageBox.critical(self, "Errore di Sistema",
-                                 f"Il file non è stato trovato sul server dell'università:\n{percorso_sorgente}")
+                                 f"Il file non è stato trovato sul server:\n{percorso_sorgente}")
             return
 
         nome_file = os.path.basename(path_relativo_db)
-
-        percorso_salvataggio, _ = QFileDialog.getSaveFileName(
-            self,
-            "Scarica Materiale",
-            nome_file,
-            "PDF Files (*.pdf);;Tutti i file (*)"
-        )
+        percorso_salvataggio, _ = QFileDialog.getSaveFileName(self, "Scarica Materiale", nome_file, "Tutti i file (*)")
 
         if percorso_salvataggio:
             try:
@@ -324,13 +348,15 @@ class StudentDashboard(QWidget):
         page = QWidget()
         self.layout_corsi = QVBoxLayout(page)
         self.layout_corsi.setContentsMargins(30, 30, 30, 30)
-        lbl = QLabel("ISCRIVITI A NUOVI CORSI")
+        lbl = QLabel("ISCRIVITI A NUOVE MATERIE")
         lbl.setFont(QFont("Arial", 14, QFont.Weight.Bold))
         lbl.setStyleSheet("color: black;")
         self.layout_corsi.addWidget(lbl)
+
         self.scroll_corsi = QScrollArea()
         self.scroll_corsi.setWidgetResizable(True)
         self.scroll_corsi.setStyleSheet("border: none; background-color: transparent;")
+
         self.contenitore_card_corsi = QWidget()
         self.griglia_corsi = QGridLayout(self.contenitore_card_corsi)
         self.griglia_corsi.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -343,7 +369,8 @@ class StudentDashboard(QWidget):
             w = self.griglia_corsi.itemAt(i).widget()
             self.griglia_corsi.removeWidget(w)
             w.setParent(None)
-        materie = get_materie_disponibili(self.id_utente)
+
+        materie = self.studente.get_materie_disponibili()
         if not materie:
             lbl = QLabel("Sei già iscritto a tutti i corsi!")
             lbl.setStyleSheet("color: black;")
@@ -353,22 +380,25 @@ class StudentDashboard(QWidget):
             for materia in materie:
                 card = QFrame()
                 card.setFixedSize(250, 200)
-                card.setStyleSheet("background-color: white; border-radius: 5px; padding: 10px; color: black;")
+                card.setStyleSheet(
+                    "background-color: white; border-radius: 5px; padding: 10px; color: black; border: 1px solid #ccc;")
                 lo = QVBoxLayout(card)
                 lo.addWidget(QLabel(f"<b>{materia['nome_materia'].upper()}</b><br>CFU: {materia['cfu']}"))
                 btn = QPushButton("ISCRIVITI")
-                btn.setStyleSheet("background-color: #20B2AA; color: white; padding: 5px;")
+                btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                btn.setStyleSheet(
+                    "background-color: #20B2AA; color: white; padding: 5px; font-weight:bold; border-radius:3px;")
                 btn.clicked.connect(lambda ch, id_m=materia['id_materia']: self.iscriviti_azione(id_m))
                 lo.addWidget(btn)
                 self.griglia_corsi.addWidget(card, r, c)
                 c += 1
                 if c >= 3:
-                    c = 0;
+                    c = 0
                     r += 1
 
     def iscriviti_azione(self, id_materia):
-        if iscrivi_studente_materia(self.id_utente, id_materia):
-            QMessageBox.information(self, "Successo", "Iscrizione avvenuta!")
+        if self.studente.iscrivi_materia(id_materia):
+            QMessageBox.information(self, "Successo", "Iscrizione avvenuta con successo!")
             self.ricarica_pagina_corsi()
 
     # ==========================
@@ -382,26 +412,32 @@ class StudentDashboard(QWidget):
         lbl.setFont(QFont("Arial", 14, QFont.Weight.Bold))
         lbl.setStyleSheet("color: black;")
         layout.addWidget(lbl)
+
         layout.addWidget(QLabel("<br><b>APPELLI DA PRENOTARE:</b>"))
         self.tabella_disp = self._crea_tabella_base(["MATERIA", "GRUPPO", "DATA", "ORA", "AZIONI"])
         layout.addWidget(self.tabella_disp)
+
         layout.addWidget(QLabel("<br><b>LE MIE PRENOTAZIONI:</b>"))
         self.tabella_pren = self._crea_tabella_base(["MATERIA", "DATA", "ORA"])
         layout.addWidget(self.tabella_pren)
         return page
 
     def ricarica_pagina_appelli(self):
-        disp, pren = get_appelli_per_studente(self.id_utente)
+        disp, pren = self.studente.get_appelli()
         self.tabella_disp.setRowCount(len(disp))
+
         for riga, app in enumerate(disp):
             self._inserisci_testo_cella(self.tabella_disp, riga, 0, app['materia'])
             self._inserisci_testo_cella(self.tabella_disp, riga, 1, app['gruppo'])
             self._inserisci_testo_cella(self.tabella_disp, riga, 2, app['data'])
             self._inserisci_testo_cella(self.tabella_disp, riga, 3, app['ora'])
+
             btn_prenota = QPushButton("PRENOTA")
-            btn_prenota.setStyleSheet("background-color: #20B2AA; color: white;")
+            btn_prenota.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_prenota.setStyleSheet("background-color: #20B2AA; color: white; font-weight:bold; border-radius:3px;")
             btn_prenota.clicked.connect(lambda ch, a_id=app['id_appello']: self._azione_prenota(a_id))
             self.tabella_disp.setCellWidget(riga, 4, btn_prenota)
+
         self.tabella_pren.setRowCount(len(pren))
         for riga, app in enumerate(pren):
             self._inserisci_testo_cella(self.tabella_pren, riga, 0, app['materia'])
@@ -409,8 +445,8 @@ class StudentDashboard(QWidget):
             self._inserisci_testo_cella(self.tabella_pren, riga, 2, app['ora'])
 
     def _azione_prenota(self, id_appello):
-        if prenota_appello_studente(self.id_utente, id_appello):
-            QMessageBox.information(self, "Successo", "Ti sei prenotato all'appello!")
+        if self.studente.prenota_appello(id_appello):
+            QMessageBox.information(self, "Successo", "Ti sei prenotato all'appello con successo!")
             self.ricarica_pagina_appelli()
 
     # ==========================
@@ -424,17 +460,21 @@ class StudentDashboard(QWidget):
         lbl.setFont(QFont("Arial", 14, QFont.Weight.Bold))
         lbl.setStyleSheet("color: black;")
         self.layout_libretto.addWidget(lbl)
+
         stats_layout = QHBoxLayout()
         self.lbl_media_arit = QLabel("MEDIA ARITMETICA:\n--")
         self.lbl_media_arit.setStyleSheet(
-            "background-color: white; color: black; padding: 15px; border-radius: 5px; font-weight: bold;")
+            "background-color: white; color: black; padding: 15px; border-radius: 5px; font-weight: bold; border: 1px solid #ccc;")
         self.lbl_media_arit.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
         self.lbl_media_pond = QLabel("MEDIA PONDERATA:\n--")
         self.lbl_media_pond.setStyleSheet(
-            "background-color: white; color: black; padding: 15px; border-radius: 5px; font-weight: bold;")
+            "background-color: white; color: black; padding: 15px; border-radius: 5px; font-weight: bold; border: 1px solid #ccc;")
         self.lbl_media_pond.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
         box_cfu = QFrame()
-        box_cfu.setStyleSheet("background-color: white; color: black; padding: 10px; border-radius: 5px;")
+        box_cfu.setStyleSheet(
+            "background-color: white; color: black; padding: 10px; border-radius: 5px; border: 1px solid #ccc;")
         box_cfu_layout = QVBoxLayout(box_cfu)
         self.lbl_cfu_text = QLabel("CFU Totali Acquisiti: 0 / 180")
         self.lbl_cfu_text.setStyleSheet("border: none; font-weight: bold;")
@@ -443,39 +483,39 @@ class StudentDashboard(QWidget):
         self.progress_cfu.setValue(0)
         self.progress_cfu.setStyleSheet(
             "QProgressBar { border: 1px solid #ccc; border-radius: 5px; text-align: center; } QProgressBar::chunk { background-color: #20B2AA; }")
+
         box_cfu_layout.addWidget(self.lbl_cfu_text)
         box_cfu_layout.addWidget(self.progress_cfu)
+
         stats_layout.addWidget(self.lbl_media_arit)
         stats_layout.addWidget(self.lbl_media_pond)
         stats_layout.addWidget(box_cfu)
         self.layout_libretto.addLayout(stats_layout)
+
         self.layout_libretto.addWidget(QLabel("<br><b>VOTI IN SOSPESO (Da Verbalizzare):</b>"))
         self.tabella_sospesi = self._crea_tabella_base(["MATERIA", "VOTO PROPOSTO", "AZIONI"])
         self.layout_libretto.addWidget(self.tabella_sospesi)
+
         self.layout_libretto.addWidget(QLabel("<br><b>REGISTRO ESAMI SUPERATI:</b>"))
         self.tabella_superati = self._crea_tabella_base(["MATERIA", "VOTO", "CFU", "GRUPPO", "VERBALIZZATO"])
         self.layout_libretto.addWidget(self.tabella_superati)
         return page
 
     def ricarica_pagina_libretto(self):
-        # 1. Svuotiamo forzatamente le tabelle per garantire un refresh grafico pulito
         self.tabella_sospesi.clearContents()
         self.tabella_sospesi.setRowCount(0)
         self.tabella_superati.clearContents()
         self.tabella_superati.setRowCount(0)
 
-        sospesi, superati = get_dati_libretto(self.id_utente)
+        sospesi, superati = self.studente.get_dati_libretto()
 
         tot_voti = 0
         somma_voti_cfu = 0
         tot_cfu = 0
 
-        # 2. Calcolo Statistiche Aggiornato
         for esame in superati:
             voto = esame['voto']
             cfu = esame['cfu']
-
-            # Se il voto è 31 (30L), ai fini del calcolo della media matematica vale 30
             voto_calcolo = 30 if voto > 30 else voto
 
             tot_voti += voto_calcolo
@@ -490,12 +530,9 @@ class StudentDashboard(QWidget):
         self.lbl_cfu_text.setText(f"CFU Totali Acquisiti: {tot_cfu} / 180")
         self.progress_cfu.setValue(tot_cfu)
 
-        # 3. Popolamento Tabella Voti In Sospeso
         self.tabella_sospesi.setRowCount(len(sospesi))
         for riga, v in enumerate(sospesi):
             self._inserisci_testo_cella(self.tabella_sospesi, riga, 0, v['materia'])
-
-            # Mostra 30L se il professore ha inserito la lode
             voto_display = "30L" if v['voto'] > 30 else str(v['voto'])
             self._inserisci_testo_cella(self.tabella_sospesi, riga, 1, voto_display)
 
@@ -504,62 +541,27 @@ class StudentDashboard(QWidget):
             box_azioni_layout.setContentsMargins(0, 0, 0, 0)
 
             btn_accetta = QPushButton("✔️ ACCETTA")
-            btn_accetta.setStyleSheet("background-color: green; color: white; font-weight: bold;")
             btn_accetta.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_accetta.setStyleSheet("background-color: green; color: white; font-weight: bold; border-radius:3px;")
             btn_accetta.clicked.connect(lambda ch, id_v=v['id_sospeso']: self._azione_verbalizza(id_v, True))
 
             btn_rifiuta = QPushButton("❌ RIFIUTA")
-            btn_rifiuta.setStyleSheet("background-color: red; color: white; font-weight: bold;")
             btn_rifiuta.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_rifiuta.setStyleSheet("background-color: red; color: white; font-weight: bold; border-radius:3px;")
             btn_rifiuta.clicked.connect(lambda ch, id_v=v['id_sospeso']: self._azione_verbalizza(id_v, False))
 
             box_azioni_layout.addWidget(btn_accetta)
             box_azioni_layout.addWidget(btn_rifiuta)
             self.tabella_sospesi.setCellWidget(riga, 2, box_azioni)
 
-        # 4. Popolamento Tabella Esami Superati (Testo definitivo)
         self.tabella_superati.setRowCount(len(superati))
         for riga, esame in enumerate(superati):
             self._inserisci_testo_cella(self.tabella_superati, riga, 0, esame['materia'])
-
             voto_str = "30L" if esame['voto'] > 30 else str(esame['voto'])
             self._inserisci_testo_cella(self.tabella_superati, riga, 1, voto_str)
             self._inserisci_testo_cella(self.tabella_superati, riga, 2, str(esame['cfu']))
             self._inserisci_testo_cella(self.tabella_superati, riga, 3, esame['gruppo'])
             self._inserisci_testo_cella(self.tabella_superati, riga, 4, "SI")
-
-    def get_corso_laurea(self):
-        with sqlite3.connect(DB_PATH) as conn:
-            cur = conn.cursor()
-            query = """
-                    SELECT c.Nome
-                    FROM Corso_Studente cs
-                             JOIN Corso c ON cs.COD_CORSO = c.ID_CORSO
-                    WHERE cs.COD_STUDENTE = ? \
-                    """
-            cur.execute(query, (self.id_utente,))
-            res = cur.fetchall()
-            if res:
-                # Se è iscritto a più corsi li unisce con " / ", altrimenti stampa l'unico trovato
-                return " / ".join([r[0] for r in res])
-            return "Nessun Corso Assegnato"
-
-    def _azione_accetta_libretto(self):
-        QMessageBox.information(self, "Info",
-                                "Questo esame è già stato confermato ed è presente nel tuo libretto definitivo.")
-
-    def _azione_rifiuta_libretto(self, id_libretto):
-        risposta = QMessageBox.question(self, "Conferma Rifiuto",
-                                        "Sei sicuro di voler rifiutare ed eliminare questo voto dal libretto?\nL'azione è irreversibile.",
-                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-
-        if risposta == QMessageBox.StandardButton.Yes:
-            if rifiuta_voto_libretto(id_libretto):
-                QMessageBox.information(self, "Successo", "Il voto è stato rifiutato ed eliminato dal libretto.")
-                self.ricarica_pagina_libretto()
-                self.ricarica_pagina_home()
-            else:
-                QMessageBox.critical(self, "Errore", "Si è verificato un problema nella rimozione del voto.")
 
     def _azione_verbalizza(self, id_sospeso, accetta):
         azione = "accettare" if accetta else "rifiutare"
@@ -568,21 +570,21 @@ class StudentDashboard(QWidget):
                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
 
         if risposta == QMessageBox.StandardButton.Yes:
-            if gestisci_verbalizzazione(id_sospeso, accetta):
+            if self.studente.gestisci_verbalizzazione(id_sospeso, accetta):
                 azione_passata = "accettato e registrato" if accetta else "rifiutato"
                 QMessageBox.information(self, "Esito", f"Hai {azione_passata} il voto con successo!")
-
-                # Ricarica immediatamente la pagina per forzare l'aggiornamento visivo di entrambe le tabelle
                 self.ricarica_pagina_libretto()
                 self.ricarica_pagina_home()
+
     # ==========================
-    # PAGINA 4: IMPOSTAZIONI
+    # PAGINA 4: IMPOSTAZIONI (Restyling Fedele all'immagine)
     # ==========================
     def _crea_pagina_impostazioni(self):
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(30, 30, 30, 30)
 
+        # Header Title and Logout Button
         header_layout = QHBoxLayout()
         lbl_titolo = QLabel("IMPOSTAZIONI GESTIONE PROFILO E APPLICAZIONE")
         lbl_titolo.setFont(QFont("Arial", 14, QFont.Weight.Bold))
@@ -599,10 +601,15 @@ class StudentDashboard(QWidget):
         layout.addLayout(header_layout)
         layout.addSpacing(40)
 
+        # Body Layout - Two Columns (Left: Password, Right: DSA)
         body_layout = QHBoxLayout()
 
+        # ==========================================
+        # LEFT COLUMN: PASSWORD
+        # ==========================================
         pwd_layout = QVBoxLayout()
         pwd_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
         lbl_pwd = QLabel("CAMBIO PASSWORD")
         lbl_pwd.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         lbl_pwd.setStyleSheet("color: black; margin-bottom: 10px;")
@@ -611,20 +618,25 @@ class StudentDashboard(QWidget):
         self.input_pwd_attuale = QLineEdit()
         self.input_pwd_attuale.setEchoMode(QLineEdit.EchoMode.Password)
         self.input_pwd_attuale.setPlaceholderText("PASSWORD ATTUALE")
-        self.input_pwd_attuale.setStyleSheet("background-color: white; color: black; padding: 10px;")
+        self.input_pwd_attuale.setStyleSheet(
+            "background-color: white; color: black; padding: 10px; border: 1px solid #ccc;")
 
         self.input_pwd_nuova = QLineEdit()
         self.input_pwd_nuova.setEchoMode(QLineEdit.EchoMode.Password)
         self.input_pwd_nuova.setPlaceholderText("NUOVA PASSWORD")
-        self.input_pwd_nuova.setStyleSheet("background-color: white; color: black; padding: 10px;")
+        self.input_pwd_nuova.setStyleSheet(
+            "background-color: white; color: black; padding: 10px; border: 1px solid #ccc;")
 
         self.input_pwd_conferma = QLineEdit()
         self.input_pwd_conferma.setEchoMode(QLineEdit.EchoMode.Password)
         self.input_pwd_conferma.setPlaceholderText("CONFERMA NUOVA PASSWORD")
-        self.input_pwd_conferma.setStyleSheet("background-color: white; color: black; padding: 10px;")
+        self.input_pwd_conferma.setStyleSheet(
+            "background-color: white; color: black; padding: 10px; border: 1px solid #ccc;")
 
         btn_salva_pwd = QPushButton("AGGIORNA PASSWORD")
-        btn_salva_pwd.setStyleSheet("background-color: #20B2AA; color: white; padding: 10px; font-weight: bold;")
+        btn_salva_pwd.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_salva_pwd.setStyleSheet(
+            "background-color: #20B2AA; color: white; padding: 10px; font-weight: bold; border-radius: 4px;")
         btn_salva_pwd.clicked.connect(self.azione_cambia_password)
 
         pwd_layout.addWidget(self.input_pwd_attuale)
@@ -632,8 +644,12 @@ class StudentDashboard(QWidget):
         pwd_layout.addWidget(self.input_pwd_conferma)
         pwd_layout.addWidget(btn_salva_pwd)
 
+        # ==========================================
+        # RIGHT COLUMN: DSA
+        # ==========================================
         dsa_layout = QVBoxLayout()
         dsa_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
         lbl_dsa = QLabel("DSA")
         lbl_dsa.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         lbl_dsa.setStyleSheet("color: black; margin-bottom: 10px;")
@@ -641,19 +657,21 @@ class StudentDashboard(QWidget):
 
         self.combo_dsa = QComboBox()
         self.combo_dsa.addItems(["-- Seleziona --", "SI", "NO"])
-        self.combo_dsa.setStyleSheet("background-color: white; color: black; padding: 10px;")
+        self.combo_dsa.setStyleSheet("background-color: white; color: black; padding: 10px; border: 1px solid #ccc;")
 
         self.btn_salva_dsa = QPushButton("CONFERMA DSA")
-        self.btn_salva_dsa.setStyleSheet("background-color: #20B2AA; color: white; padding: 10px; font-weight: bold;")
+        self.btn_salva_dsa.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_salva_dsa.setStyleSheet(
+            "background-color: #A9A9A9; color: white; padding: 10px; font-weight: bold; border-radius: 4px;")
         self.btn_salva_dsa.clicked.connect(self.azione_salva_dsa)
 
         dsa_layout.addWidget(self.combo_dsa)
         dsa_layout.addWidget(self.btn_salva_dsa)
 
-        body_layout.addLayout(pwd_layout)
-        body_layout.addSpacing(50)
-        body_layout.addLayout(dsa_layout)
-        body_layout.addStretch()
+        # Aggiungiamo le due colonne al layout centrale
+        body_layout.addLayout(pwd_layout, 1)  # Stretch factor 1
+        body_layout.addSpacing(60)  # Spazio al centro
+        body_layout.addLayout(dsa_layout, 1)  # Stretch factor 1
 
         layout.addLayout(body_layout)
         layout.addStretch()
@@ -664,28 +682,37 @@ class StudentDashboard(QWidget):
         self.input_pwd_attuale.clear()
         self.input_pwd_nuova.clear()
         self.input_pwd_conferma.clear()
-        stato_dsa = get_stato_dsa(self.id_utente)
+
+        # Recuperiamo il valore dalla classe OOP dello Studente
+        stato_dsa = self.studente.dsa
 
         if stato_dsa is not None:
+            # DSA è già stato dichiarato in passato (1 = SI, 0 = NO)
             indice = 1 if stato_dsa == 1 else 2
             self.combo_dsa.setCurrentIndex(indice)
             self.combo_dsa.setEnabled(False)
+
             self.btn_salva_dsa.setEnabled(False)
             self.btn_salva_dsa.setText("GIÀ DICHIARATO")
+            self.btn_salva_dsa.setCursor(Qt.CursorShape.ArrowCursor)
             self.btn_salva_dsa.setStyleSheet(
-                "background-color: #A9A9A9; color: white; padding: 10px; font-weight: bold;")
+                "background-color: #A9A9A9; color: white; padding: 10px; font-weight: bold; border-radius: 4px;")
         else:
+            # DSA non è mai stato dichiarato
             self.combo_dsa.setCurrentIndex(0)
             self.combo_dsa.setEnabled(True)
+
             self.btn_salva_dsa.setEnabled(True)
             self.btn_salva_dsa.setText("CONFERMA DSA")
+            self.btn_salva_dsa.setCursor(Qt.CursorShape.PointingHandCursor)
             self.btn_salva_dsa.setStyleSheet(
-                "background-color: #20B2AA; color: white; padding: 10px; font-weight: bold;")
+                "background-color: #20B2AA; color: white; padding: 10px; font-weight: bold; border-radius: 4px;")
 
     def azione_cambia_password(self):
         pwd_attuale = self.input_pwd_attuale.text()
         pwd_nuova = self.input_pwd_nuova.text()
         pwd_conferma = self.input_pwd_conferma.text()
+
         if not pwd_attuale or not pwd_nuova or not pwd_conferma:
             QMessageBox.warning(self, "Attenzione", "Compila tutti i campi della password.")
             return
@@ -693,7 +720,7 @@ class StudentDashboard(QWidget):
             QMessageBox.warning(self, "Attenzione", "Le nuove password non coincidono.")
             return
 
-        successo, messaggio = cambia_password(self.id_utente, pwd_attuale, pwd_nuova)
+        successo, messaggio = self.studente.cambia_password(pwd_attuale, pwd_nuova)
         if successo:
             QMessageBox.information(self, "Successo", messaggio)
             self.input_pwd_attuale.clear()
@@ -705,18 +732,31 @@ class StudentDashboard(QWidget):
     def azione_salva_dsa(self):
         scelta = self.combo_dsa.currentText()
         if scelta == "-- Seleziona --":
-            QMessageBox.warning(self, "Attenzione", "Seleziona un'opzione valida per il DSA.")
+            QMessageBox.warning(self, "Attenzione", "Seleziona un'opzione valida (SI o NO) per la dichiarazione DSA.")
             return
+
         risposta = QMessageBox.question(self, "Conferma Irreversibile",
-                                        "Sei sicuro? Questa scelta non potrà più essere modificata.",
+                                        "Sei sicuro di voler confermare questa scelta?\nLa dichiarazione DSA non potrà più essere modificata.",
                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+
         if risposta == QMessageBox.StandardButton.Yes:
             stato = 1 if scelta == "SI" else 0
-            if set_stato_dsa(self.id_utente, stato):
-                QMessageBox.information(self, "Successo", "Stato DSA aggiornato correttamente.")
+
+            try:
+                # Salviamo il dato nel DB in maniera stabile
+                with sqlite3.connect(DB_PATH) as conn:
+                    cur = conn.cursor()
+                    cur.execute("UPDATE Studente SET DSA = ? WHERE ID_STUDENTE = ?", (stato, self.studente.id_utente))
+                    conn.commit()
+
+                # Aggiorniamo la variabile locale dell'oggetto OOP
+                self.studente.dsa = stato
+
+                QMessageBox.information(self, "Successo", "Stato DSA aggiornato e registrato nel sistema con successo.")
                 self.ricarica_pagina_impostazioni()
-            else:
-                QMessageBox.critical(self, "Errore", "Si è verificato un errore nel salvataggio.")
+
+            except sqlite3.Error as e:
+                QMessageBox.critical(self, "Errore DB", f"Si è verificato un errore nel salvataggio: {e}")
 
     def esegui_logout(self):
         from ui.login_window import LoginWindow

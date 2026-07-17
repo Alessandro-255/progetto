@@ -1,20 +1,21 @@
-import os
-import sqlite3
 from PyQt6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QLabel,
-                             QPushButton, QScrollArea, QGridLayout, QFrame,
-                             QStackedWidget, QMessageBox, QDialog, QFormLayout,
-                             QComboBox, QLineEdit, QTabWidget)
-from PyQt6.QtCore import Qt, pyqtSignal
+                             QPushButton, QFrame,
+                             QStackedWidget, QMessageBox, QFormLayout,
+                             QComboBox, QLineEdit, QTabWidget,
+                             QTableWidget, QTableWidgetItem, QHeaderView)
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
-from database import DB_PATH, cambia_password
+
+# Importiamo direttamente la nostra classe orientata agli oggetti!
+from database.admin import Admin
 
 
 class AdminDashboard(QWidget):
     def __init__(self, id_utente, nome, cognome):
         super().__init__()
-        self.id_utente = id_utente
-        self.nome = nome
-        self.cognome = cognome
+        # Inizializziamo l'oggetto Admin che si occuperà di tutto il DB
+        self.admin = Admin(id_utente, nome, cognome)
+
         self.setWindowTitle("Dashboard Admin - Gestionale UNIVPM")
         self.setMinimumSize(1100, 700)
         self.menu_buttons = {}
@@ -37,7 +38,7 @@ class AdminDashboard(QWidget):
         lbl_icona.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_icona.setStyleSheet("border: none; margin-top: 20px; color: black;")
 
-        lbl_nome = QLabel(f"ADMIN {self.nome.upper()}")
+        lbl_nome = QLabel(f"ADMIN {self.admin.nome.upper()}")
         lbl_nome.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_nome.setFont(QFont("Arial", 10, QFont.Weight.Bold))
         lbl_nome.setStyleSheet("border: none; color: black;")
@@ -54,8 +55,8 @@ class AdminDashboard(QWidget):
         self.stacked_widget = QStackedWidget()
         self.stacked_widget.setStyleSheet("background-color: #E0E0E0;")
 
-        self.pagina_gestione_utenti = self._crea_pagina_gestione_utenti()  # Indice 0
-        self.pagina_impostazioni = self._crea_pagina_impostazioni()  # Indice 1
+        self.pagina_gestione_utenti = self._crea_pagina_gestione_utenti()
+        self.pagina_impostazioni = self._crea_pagina_impostazioni()
 
         self.stacked_widget.addWidget(self.pagina_gestione_utenti)
         self.stacked_widget.addWidget(self.pagina_impostazioni)
@@ -92,7 +93,7 @@ class AdminDashboard(QWidget):
                 "background-color: #20B2AA; color: white; text-align: left; padding: 15px; border: none; font-weight: bold; border-radius: 5px;")
 
     # ==========================================
-    # PAGINA 0: GESTIONE UTENTI (CREAZIONE E MODIFICA)
+    # PAGINA 0: GESTIONE UTENTI E ASSEGNAZIONI (CRUD)
     # ==========================================
     def _crea_pagina_gestione_utenti(self):
         page = QWidget()
@@ -109,11 +110,13 @@ class AdminDashboard(QWidget):
         tabs.setStyleSheet("background-color: white; color: black;")
 
         tabs.addTab(self._tab_crea_utente(), "➕ Crea Nuovo Utente")
-        tabs.addTab(self._tab_modifica_professore(), "✏️ Modifica Professore")
+        tabs.addTab(self._tab_modifica_elimina(), "✏️ Modifica/Elimina Utente")
+        tabs.addTab(self._tab_assegnazioni(), "🔗 Assegnazioni Corsi")
 
         layout.addWidget(tabs)
         return page
 
+    # --- TAB 1: CREATE ---
     def _tab_crea_utente(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
@@ -136,8 +139,7 @@ class AdminDashboard(QWidget):
         self.input_matricola = QLineEdit()
         self.input_matricola.setPlaceholderText("Es: MAT10003, DOC103 o TUT01")
 
-        # Campo specifico per Professore e Tutor (Corso di Laurea)
-        self.lbl_corso_associato = QLabel("Corso di Laurea:")
+        self.lbl_corso_associato = QLabel("Assegnazione Iniziale Corso:")
         self.combo_corso_associato = QComboBox()
 
         form.addRow("Ruolo Utente:", self.input_ruolo)
@@ -153,8 +155,7 @@ class AdminDashboard(QWidget):
         layout.addSpacing(20)
 
         btn_crea = QPushButton("REGISTRA UTENTE NEL SISTEMA")
-        btn_crea.setStyleSheet(
-            "background-color: #0055A4; color: white; font-weight: bold; padding: 12px; border-radius: 4px;")
+        btn_crea.setStyleSheet("background-color: #0055A4; color: white; font-weight: bold; padding: 12px; border-radius: 4px;")
         btn_crea.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_crea.clicked.connect(self.salva_nuovo_utente)
         layout.addWidget(btn_crea)
@@ -172,34 +173,6 @@ class AdminDashboard(QWidget):
             self.lbl_corso_associato.hide()
             self.combo_corso_associato.hide()
 
-    def ricarica_dati_admin(self):
-        """Carica in modo sicuro i dati dal DB quando la pagina viene aperta"""
-        try:
-            conn = sqlite3.connect(DB_PATH)
-            cur = conn.cursor()
-
-            # Carica corsi per la combo professori/tutor
-            self.combo_corso_associato.blockSignals(True)
-            self.combo_corso_associato.clear()
-            cur.execute("SELECT ID_CORSO, Nome FROM Corso")
-            for r in cur.fetchall():
-                self.combo_corso_associato.addItem(r[1], r[0])
-            self.combo_corso_associato.blockSignals(False)
-
-            # Carica professori per la combo modifica
-            self.combo_professori.blockSignals(True)
-            self.combo_professori.clear()
-            cur.execute(
-                "SELECT p.ID_PROF, u.Nome, u.Cognome FROM Professore p JOIN Utente u ON p.ID_PROF = u.ID_UTENTE")
-            for r in cur.fetchall():
-                self.combo_professori.addItem(f"Prof. {r[1]} {r[2]} (ID: {r[0]})", r[0])
-            self.combo_professori.blockSignals(False)
-
-            conn.close()
-            self._carica_dati_professore()
-        except Exception as e:
-            print(f"Errore caricamento dati admin: {e}")
-
     def salva_nuovo_utente(self):
         ruolo = self.input_ruolo.currentText()
         nome = self.input_nome.text().strip()
@@ -208,36 +181,17 @@ class AdminDashboard(QWidget):
         cf = self.input_cf.text().strip().upper()
         password = self.input_password.text().strip()
         matricola = self.input_matricola.text().strip()
+        id_corso = self.combo_corso_associato.currentData()
 
         if not nome or not cognome or not email or not cf or not password or not matricola:
             QMessageBox.warning(self, "Attenzione", "Tutti i campi anagrafici sono obbligatori.")
             return
 
-        conn = sqlite3.connect(DB_PATH)
-        cur = conn.cursor()
-        try:
-            cur.execute(
-                "INSERT INTO Utente (Nome, Cognome, Data_Nascita, COD_FISCALE, Email, Password) VALUES (?, ?, '2000-01-01', ?, ?, ?)",
-                (nome, cognome, cf, email, password)
-            )
-            id_utente = cur.lastrowid
+        # Deleghiamo la creazione all'oggetto Admin!
+        successo, msg = self.admin.salva_nuovo_utente(ruolo, nome, cognome, email, cf, password, matricola, id_corso)
 
-            if ruolo == "Studente":
-                cur.execute("INSERT INTO Studente (ID_STUDENTE, Matricola) VALUES (?, ?)", (id_utente, matricola))
-            elif ruolo == "Professore":
-                cur.execute("INSERT INTO Professore (ID_PROF) VALUES (?)", (id_utente,))
-                id_corso = self.combo_corso_associato.currentData()
-                if id_corso:
-                    cur.execute("INSERT INTO Corso_Professore (COD_PROFESSORE, COD_CORSO) VALUES (?, ?)",
-                                (id_utente, id_corso))
-            elif ruolo == "Tutor":
-                cur.execute("INSERT INTO Tutor (ID_TUTOR) VALUES (?)", (id_utente,))
-                id_corso = self.combo_corso_associato.currentData()
-                if id_corso:
-                    cur.execute("INSERT INTO Corso_Tutor (COD_TUTOR, COD_CORSO) VALUES (?, ?)", (id_utente, id_corso))
-
-            conn.commit()
-            QMessageBox.information(self, "Successo", f"{ruolo} {nome} {cognome} creato e associato con successo!")
+        if successo:
+            QMessageBox.information(self, "Successo", msg)
             self.input_nome.clear()
             self.input_cognome.clear()
             self.input_email.clear()
@@ -245,97 +199,231 @@ class AdminDashboard(QWidget):
             self.input_password.clear()
             self.input_matricola.clear()
             self.ricarica_dati_admin()
-        except sqlite3.Error as e:
-            QMessageBox.critical(self, "Errore Database", f"Impossibile registrare l'utente:\n{e}")
-        finally:
-            conn.close()
+        else:
+            QMessageBox.critical(self, "Errore", msg)
 
-    # ==========================================
-    # TAB 2: MODIFICA INFORMAZIONI PROFESSORE
-    # ==========================================
-    def _tab_modifica_professore(self):
+    # --- TAB 2: UPDATE & DELETE ---
+    def _tab_modifica_elimina(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(20, 20, 20, 20)
 
         form = QFormLayout()
+        self.combo_utenti_modifica = QComboBox()
+        self.combo_utenti_modifica.currentIndexChanged.connect(self._carica_dati_modifica)
 
-        self.combo_professori = QComboBox()
-        self.combo_professori.currentIndexChanged.connect(self._carica_dati_professore)
+        self.edit_utente_nome = QLineEdit()
+        self.edit_utente_cognome = QLineEdit()
+        self.edit_utente_email = QLineEdit()
 
-        self.edit_prof_nome = QLineEdit()
-        self.edit_prof_cognome = QLineEdit()
-        self.edit_prof_email = QLineEdit()
-
-        form.addRow("Seleziona Professore:", self.combo_professori)
-        form.addRow("Nome:", self.edit_prof_nome)
-        form.addRow("Cognome:", self.edit_prof_cognome)
-        form.addRow("Email:", self.edit_prof_email)
+        form.addRow("Seleziona Utente:", self.combo_utenti_modifica)
+        form.addRow("Nome:", self.edit_utente_nome)
+        form.addRow("Cognome:", self.edit_utente_cognome)
+        form.addRow("Email:", self.edit_utente_email)
 
         layout.addLayout(form)
         layout.addSpacing(20)
 
-        lbl_info = QLabel(
-            "<i>Nota: Un professore gestisce più corsi e materie direttamente dalla sua dashboard personale. Da qui puoi aggiornare le sue credenziali anagrafiche.</i>")
-        lbl_info.setStyleSheet("color: #666;")
-        layout.addWidget(lbl_info)
-        layout.addSpacing(15)
+        btn_layout = QHBoxLayout()
 
-        btn_aggiorna = QPushButton("SALVA MODIFICHE PROFESSORE")
-        btn_aggiorna.setStyleSheet(
-            "background-color: #20B2AA; color: white; font-weight: bold; padding: 12px; border-radius: 4px;")
+        btn_elimina = QPushButton("🗑️ ELIMINA UTENTE")
+        btn_elimina.setStyleSheet("background-color: #D32F2F; color: white; font-weight: bold; padding: 12px; border-radius: 4px;")
+        btn_elimina.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_elimina.clicked.connect(self.elimina_utente)
+
+        btn_aggiorna = QPushButton("💾 SALVA MODIFICHE")
+        btn_aggiorna.setStyleSheet("background-color: #20B2AA; color: white; font-weight: bold; padding: 12px; border-radius: 4px;")
         btn_aggiorna.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_aggiorna.clicked.connect(self.salva_modifiche_professore)
-        layout.addWidget(btn_aggiorna)
+        btn_aggiorna.clicked.connect(self.salva_modifiche_utente)
+
+        btn_layout.addWidget(btn_elimina)
+        btn_layout.addWidget(btn_aggiorna)
+        layout.addLayout(btn_layout)
 
         layout.addStretch()
         return widget
 
-    def _carica_dati_professore(self):
-        id_prof = self.combo_professori.currentData()
-        if not id_prof:
-            self.edit_prof_nome.clear()
-            self.edit_prof_cognome.clear()
-            self.edit_prof_email.clear()
+    def _carica_dati_modifica(self):
+        id_u = self.combo_utenti_modifica.currentData()
+        if not id_u:
+            self.edit_utente_nome.clear()
+            self.edit_utente_cognome.clear()
+            self.edit_utente_email.clear()
             return
 
-        conn = sqlite3.connect(DB_PATH)
-        cur = conn.cursor()
-        cur.execute("SELECT Nome, Cognome, Email FROM Utente WHERE ID_UTENTE = ?", (id_prof,))
-        res = cur.fetchone()
-        conn.close()
+        info = self.admin.get_info_utente(id_u)
+        if info:
+            self.edit_utente_nome.setText(info["nome"])
+            self.edit_utente_cognome.setText(info["cognome"])
+            self.edit_utente_email.setText(info["email"])
 
-        if res:
-            self.edit_prof_nome.setText(res[0])
-            self.edit_prof_cognome.setText(res[1])
-            self.edit_prof_email.setText(res[2])
+    def salva_modifiche_utente(self):
+        id_u = self.combo_utenti_modifica.currentData()
+        if not id_u: return
 
-    def salva_modifiche_professore(self):
-        id_prof = self.combo_professori.currentData()
-        if not id_prof:
-            QMessageBox.warning(self, "Attenzione", "Seleziona un professore valido.")
-            return
-
-        nome = self.edit_prof_nome.text().strip()
-        cognome = self.edit_prof_cognome.text().strip()
-        email = self.edit_prof_email.text().strip()
+        nome = self.edit_utente_nome.text().strip()
+        cognome = self.edit_utente_cognome.text().strip()
+        email = self.edit_utente_email.text().strip()
 
         if not nome or not cognome or not email:
             QMessageBox.warning(self, "Attenzione", "Compila tutti i campi.")
             return
 
-        conn = sqlite3.connect(DB_PATH)
-        cur = conn.cursor()
-        try:
-            cur.execute("UPDATE Utente SET Nome = ?, Cognome = ?, Email = ? WHERE ID_UTENTE = ?",
-                        (nome, cognome, email, id_prof))
-            conn.commit()
-            QMessageBox.information(self, "Successo", "Informazioni del professore aggiornate correttamente!")
+        successo, msg = self.admin.salva_modifiche_utente(id_u, nome, cognome, email)
+        if successo:
+            QMessageBox.information(self, "Successo", msg)
             self.ricarica_dati_admin()
-        except sqlite3.Error as e:
-            QMessageBox.critical(self, "Errore DB", f"Impossibile aggiornare:\n{e}")
-        finally:
-            conn.close()
+        else:
+            QMessageBox.critical(self, "Errore", msg)
+
+    def elimina_utente(self):
+        id_u = self.combo_utenti_modifica.currentData()
+        if not id_u: return
+
+        risposta = QMessageBox.question(self, "Conferma Eliminazione",
+                                        "Vuoi davvero eliminare questo utente? Tutti i suoi dati (libretti, esami, assegnazioni) verranno rimossi a cascata dal sistema.",
+                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+
+        if risposta == QMessageBox.StandardButton.Yes:
+            successo, msg = self.admin.elimina_utente(id_u)
+            if successo:
+                QMessageBox.information(self, "Successo", msg)
+                self.ricarica_dati_admin()
+            else:
+                QMessageBox.critical(self, "Errore", msg)
+
+    # --- TAB 3: ASSEGNAZIONI DOCENTI E TUTOR ---
+    def _tab_assegnazioni(self):
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        # Combo per scegliere il docente/tutor
+        selez_layout = QHBoxLayout()
+        selez_layout.addWidget(QLabel("<b>Seleziona Docente o Tutor:</b>"))
+        self.combo_utenti_assegnazioni = QComboBox()
+        self.combo_utenti_assegnazioni.currentIndexChanged.connect(self._carica_tabella_assegnazioni)
+        selez_layout.addWidget(self.combo_utenti_assegnazioni)
+        layout.addLayout(selez_layout)
+        layout.addSpacing(10)
+
+        # Tabella di visualizzazione
+        self.tabella_assegnazioni = QTableWidget()
+        self.tabella_assegnazioni.setColumnCount(2)
+        self.tabella_assegnazioni.setHorizontalHeaderLabels(["CORSO DI LAUREA ASSEGNATO", "AZIONI"])
+        self.tabella_assegnazioni.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.tabella_assegnazioni.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        self.tabella_assegnazioni.setStyleSheet("background-color: white; color: black; border: 1px solid #ccc;")
+        layout.addWidget(self.tabella_assegnazioni)
+        layout.addSpacing(10)
+
+        # Controlli per aggiungere nuovo corso
+        add_layout = QHBoxLayout()
+        add_layout.addWidget(QLabel("<b>Nuovo Corso da Assegnare:</b>"))
+        self.combo_nuovo_corso = QComboBox()
+        btn_aggiungi_corso = QPushButton("➕ AGGIUNGI CORSO")
+        btn_aggiungi_corso.setStyleSheet("background-color: #FF8C00; color: white; font-weight: bold; padding: 6px; border-radius: 4px;")
+        btn_aggiungi_corso.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_aggiungi_corso.clicked.connect(self.aggiungi_assegnazione)
+
+        add_layout.addWidget(self.combo_nuovo_corso)
+        add_layout.addWidget(btn_aggiungi_corso)
+        layout.addLayout(add_layout)
+
+        return widget
+
+    def _carica_tabella_assegnazioni(self):
+        data = self.combo_utenti_assegnazioni.currentData()
+        if not data:
+            self.tabella_assegnazioni.setRowCount(0)
+            return
+
+        id_u = data["id"]
+        ruolo = data["ruolo"]
+
+        assegnazioni = self.admin.get_assegnazioni_utente(id_u, ruolo)
+
+        self.tabella_assegnazioni.setRowCount(len(assegnazioni))
+        for riga, ass in enumerate(assegnazioni):
+            id_corso = ass["id_corso"]
+            nome_corso = ass["nome_corso"]
+
+            item = QTableWidgetItem(nome_corso)
+            item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+            self.tabella_assegnazioni.setItem(riga, 0, item)
+
+            btn_rimuovi = QPushButton("❌ REVOCA ACCESSO")
+            btn_rimuovi.setStyleSheet("background-color: #D32F2F; color: white; padding: 4px;")
+            btn_rimuovi.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_rimuovi.clicked.connect(lambda checked, c_id=id_corso, r=ruolo, u=id_u: self.rimuovi_assegnazione(u, r, c_id))
+
+            self.tabella_assegnazioni.setCellWidget(riga, 1, btn_rimuovi)
+
+    def aggiungi_assegnazione(self):
+        data = self.combo_utenti_assegnazioni.currentData()
+        id_corso = self.combo_nuovo_corso.currentData()
+
+        if not data or not id_corso: return
+        id_u = data["id"]
+        ruolo = data["ruolo"]
+
+        successo, msg = self.admin.aggiungi_assegnazione(id_u, ruolo, id_corso)
+        if successo:
+            self._carica_tabella_assegnazioni()
+            QMessageBox.information(self, "Successo", msg)
+        else:
+            QMessageBox.warning(self, "Attenzione", msg)
+
+    def rimuovi_assegnazione(self, id_u, ruolo, id_corso):
+        risposta = QMessageBox.question(self, "Conferma Revoca",
+                                        "Sei sicuro di voler revocare l'accesso a questo corso?",
+                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if risposta == QMessageBox.StandardButton.Yes:
+            successo, msg = self.admin.rimuovi_assegnazione(id_u, ruolo, id_corso)
+            if successo:
+                self._carica_tabella_assegnazioni()
+            else:
+                QMessageBox.critical(self, "Errore", msg)
+
+    # --- RICARICA GLOBALE DEI DATI DELLE COMBOBOX ---
+    def ricarica_dati_admin(self):
+        # 1. Carica corsi per Creazione e Assegnazione
+        self.combo_corso_associato.blockSignals(True)
+        self.combo_nuovo_corso.blockSignals(True)
+        self.combo_corso_associato.clear()
+        self.combo_nuovo_corso.clear()
+
+        corsi = self.admin.get_corsi_laurea()
+        for c in corsi:
+            self.combo_corso_associato.addItem(c["nome"], c["id"])
+            self.combo_nuovo_corso.addItem(c["nome"], c["id"])
+
+        self.combo_corso_associato.blockSignals(False)
+        self.combo_nuovo_corso.blockSignals(False)
+
+        # 2. Carica TUTTI gli utenti per Modifica/Elimina
+        self.combo_utenti_modifica.blockSignals(True)
+        self.combo_utenti_modifica.clear()
+
+        utenti = self.admin.get_utenti_modifica()
+        for u in utenti:
+            self.combo_utenti_modifica.addItem(f"{u['nome']} {u['cognome']} (ID: {u['id']})", u['id'])
+
+        self.combo_utenti_modifica.blockSignals(False)
+
+        # 3. Carica SOLO Professori e Tutor per le Assegnazioni
+        self.combo_utenti_assegnazioni.blockSignals(True)
+        self.combo_utenti_assegnazioni.clear()
+
+        utenti_ass = self.admin.get_utenti_assegnazioni()
+        for u in utenti_ass:
+            self.combo_utenti_assegnazioni.addItem(f"[{u['ruolo']}] {u['nome']} {u['cognome']}", {"id": u['id'], "ruolo": u['ruolo']})
+
+        self.combo_utenti_assegnazioni.blockSignals(False)
+
+        # Aggiorniamo i campi a schermo in base alle nuove combo
+        self._carica_dati_modifica()
+        self._carica_tabella_assegnazioni()
 
     # ==========================================
     # PAGINA 1: IMPOSTAZIONI (CAMBIO PASSWORD / LOGOUT)
@@ -413,7 +501,9 @@ class AdminDashboard(QWidget):
             QMessageBox.warning(self, "Attenzione", "Le nuove password non coincidono.")
             return
 
-        successo, messaggio = cambia_password(self.id_utente, pwd_attuale, pwd_nuova)
+        # Sfruttiamo il metodo ereditato direttamente dall'oggetto Utente/Admin!
+        successo, messaggio = self.admin.cambia_password(pwd_attuale, pwd_nuova)
+
         if successo:
             QMessageBox.information(self, "Successo", messaggio)
             self.input_pwd_attuale.clear()
@@ -423,7 +513,7 @@ class AdminDashboard(QWidget):
             QMessageBox.critical(self, "Errore", messaggio)
 
     def esegui_logout(self):
-        from login_window import LoginWindow
+        from ui.login_window import LoginWindow
         self.login = LoginWindow()
         self.login.show()
         self.close()

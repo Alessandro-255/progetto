@@ -684,7 +684,7 @@ class StudentDashboard(QWidget):
                 QMessageBox.critical(self, "Errore", "Si è verificato un errore nel salvataggio.")
 
     def esegui_logout(self):
-        from login_window import LoginWindow
+        from ui.login_window import LoginWindow
         self.login = LoginWindow()
         self.login.show()
         self.close()

@@ -1,17 +1,10 @@
 import os
 import re
 import shutil
-from datetime import date
-from PyQt6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QLabel,
-                             QPushButton, QScrollArea, QGridLayout, QFrame,
-                             QStackedWidget, QMessageBox, QDialog, QFormLayout,
-                             QComboBox, QLineEdit, QSpinBox, QFileDialog, QDateEdit,
-                             QTableWidget, QTableWidgetItem, QHeaderView)
+from PyQt6.QtWidgets import *
 from PyQt6.QtCore import Qt, QDate, pyqtSignal
 from PyQt6.QtGui import QFont
-from database import (get_corsi_professore, get_tutti_corsi_laurea, crea_nuova_materia,
-                      get_materiale_corso, get_info_materia, aggiungi_materiale_corso,
-                      get_path_materiale, elimina_materiale_corso, cambia_password, DB_PATH)
+from database import *
 
 
 # --- CLASSE PERSONALIZZATA PER I QUADRATI DEI CORSI ---
@@ -26,12 +19,13 @@ class ClickableFrame(QFrame):
 # ==========================================
 # POPUP (QDIALOG) PER CREARE LA NUOVA MATERIA
 # ==========================================
+
 class DialogNuovaMateria(QDialog):
-    def __init__(self, id_professore, parent=None):
+    def __init__(self, professore_obj, parent=None):
         super().__init__(parent)
-        self.id_professore = id_professore
+        self.prof = professore_obj
         self.setWindowTitle("Crea Nuova Materia")
-        self.setFixedSize(450, 250)
+        self.setFixedSize(450, 300)  # Leggermente più alto per l'Anno
 
         layout = QVBoxLayout(self)
 
@@ -43,20 +37,33 @@ class DialogNuovaMateria(QDialog):
         form_layout = QFormLayout()
 
         self.combo_corso = QComboBox()
-        self.corsi_disponibili = get_tutti_corsi_laurea()
-        for c in self.corsi_disponibili:
-            self.combo_corso.addItem(c['nome'], c['id_corso'])
+
+        # FIX LOGICA: Carichiamo solo i corsi a cui il professore è stato assegnato dall'Admin
+        self.corsi_disponibili = self.prof.get_corsi_assegnati()
+
+        if not self.corsi_disponibili:
+            self.combo_corso.addItem("-- Nessun corso assegnato --", None)
+        else:
+            for c in self.corsi_disponibili:
+                # FIX KEYERROR: Usiamo la chiave 'id' corretta restituita dal DB
+                self.combo_corso.addItem(c['nome'], c['id'])
 
         self.input_nome = QLineEdit()
-        self.input_nome.setPlaceholderText("Es: Fisica Generale")
+        self.input_nome.setPlaceholderText("Es: Analisi Matematica")
 
         self.input_cfu = QSpinBox()
         self.input_cfu.setRange(1, 18)
         self.input_cfu.setValue(6)
 
+        # FIX SCHEMA DB: Aggiunto l'input per l'Anno
+        self.input_anno = QSpinBox()
+        self.input_anno.setRange(1, 5)
+        self.input_anno.setValue(1)
+
         form_layout.addRow("Corso di Laurea:", self.combo_corso)
         form_layout.addRow("Nome Materia:", self.input_nome)
         form_layout.addRow("Numero CFU:", self.input_cfu)
+        form_layout.addRow("Anno del Corso:", self.input_anno)
 
         layout.addLayout(form_layout)
         layout.addSpacing(15)
@@ -75,14 +82,21 @@ class DialogNuovaMateria(QDialog):
     def salva_materia(self):
         nome_materia = self.input_nome.text().strip()
         cfu = self.input_cfu.value()
+        anno = self.input_anno.value()
         id_corso_laurea = self.combo_corso.currentData()
         nome_corso_laurea = self.combo_corso.currentText()
+
+        if not id_corso_laurea:
+            QMessageBox.warning(self, "Attenzione",
+                                "Non puoi creare materie perché non sei stato assegnato a nessun Corso di Laurea. Contatta la Segreteria.")
+            return
 
         if not nome_materia:
             QMessageBox.warning(self, "Attenzione", "Devi inserire il nome della materia.")
             return
 
-        successo, msg = crea_nuova_materia(self.id_professore, nome_materia, cfu, id_corso_laurea)
+        # Sfruttiamo il metodo OOP incapsulato
+        successo, msg = self.prof.crea_nuova_materia(nome_materia, cfu, anno, id_corso_laurea)
 
         if successo:
             def pulisci_stringa(testo):
@@ -92,7 +106,7 @@ class DialogNuovaMateria(QDialog):
             cartella_materia = pulisci_stringa(nome_materia)
 
             base_dir = os.path.dirname(os.path.abspath(__file__))
-            path_assoluto = os.path.join(base_dir, "corso", cartella_corso, cartella_materia)
+            path_assoluto = os.path.join(base_dir, "../corso", cartella_corso, cartella_materia)
 
             try:
                 os.makedirs(path_assoluto, exist_ok=True)
@@ -101,11 +115,10 @@ class DialogNuovaMateria(QDialog):
                 self.accept()
             except Exception as e:
                 QMessageBox.warning(self, "Attenzione",
-                                    f"Materia salvata nel DB, ma impossibile creare la cartella.\nErrore: {e}")
+                                    f"Materia salvata nel DB, ma impossibile creare la cartella file locale.\nErrore: {e}")
                 self.accept()
         else:
-            QMessageBox.critical(self, "Errore Database", f"Impossibile salvare la materia: {msg}")
-
+            QMessageBox.critical(self, "Errore Database", msg)
 
 # ==========================================
 # POPUP (QDIALOG) PER LA CREAZIONE APPELLO
@@ -609,12 +622,20 @@ class DialogStatisticheAppello(QDialog):
 # ==========================================
 # DASHBOARD PRINCIPALE DEL PROFESSORE
 # ==========================================
+# Aggiungi questo import in alto, vicino agli altri
+from database.professore import Professore
+
+
 class ProfessorDashboard(QWidget):
     def __init__(self, id_utente, nome, cognome):
         super().__init__()
+        # Inizializziamo il motore OOP del Professore
+        self.professore = Professore(id_utente, nome, cognome)
+
         self.id_utente = id_utente
         self.nome = nome
         self.cognome = cognome
+        # ... (il resto del codice rimane uguale)
         self.matricola = f"DOC{id_utente}00"
         self.corso_corrente_id = None
         self.corso_corrente_nome = ""
@@ -756,8 +777,7 @@ class ProfessorDashboard(QWidget):
             self.griglia_home.removeWidget(w)
             w.setParent(None)
 
-        corsi_reali = get_corsi_professore(self.id_utente)
-
+        corsi_reali = self.professore.get_corsi_professore()
         if not corsi_reali:
             lbl = QLabel("Non hai ancora creato nessuna materia.")
             lbl.setStyleSheet("color: black;")
@@ -1108,7 +1128,7 @@ class ProfessorDashboard(QWidget):
             QMessageBox.critical(self, "Errore", messaggio)
 
     def esegui_logout(self):
-        from login_window import LoginWindow
+        from ui.login_window import LoginWindow
         self.login = LoginWindow()
         self.login.show()
         self.close()
@@ -1193,7 +1213,7 @@ class ProfessorDashboard(QWidget):
     # --- AZIONI DEL DETTAGLIO CORSO ---
 
     def apri_creazione_materia(self):
-        dialog = DialogNuovaMateria(self.id_utente, self)
+        dialog = DialogNuovaMateria(self.professore, self)
         if dialog.exec():
             self.ricarica_pagina_home()
 
@@ -1290,7 +1310,7 @@ class ProfessorDashboard(QWidget):
             nome_file = os.path.basename(file_path)
 
             base_dir = os.path.dirname(os.path.abspath(__file__))
-            path_dir_destinazione = os.path.join(base_dir, "corso", cartella_corso, cartella_materia)
+            path_dir_destinazione = os.path.join(base_dir, "../corso", cartella_corso, cartella_materia)
 
             os.makedirs(path_dir_destinazione, exist_ok=True)
             path_file_destinazione = os.path.join(path_dir_destinazione, nome_file)

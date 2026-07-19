@@ -1,15 +1,14 @@
 import pytest
 from unittest.mock import patch, MagicMock
 
-# Importiamo le classi dal package database
 from database.professore import Professore
 from database.studente import Studente
 from database.tutor import Tutor
 
 
-# ==========================================
+
 # TEST CLASSE PROFESSORE
-# ==========================================
+
 class TestProfessore:
     @patch('database.professore.sqlite3.connect')
     def test_get_corsi_assegnati(self, mock_connect):
@@ -39,9 +38,9 @@ class TestProfessore:
         assert risultato[0]["nome"] == "Ingegneria Informatica"
 
 
-# ==========================================
+
 # TEST CLASSE STUDENTE
-# ==========================================
+
 class TestStudente:
     @patch('database.studente.sqlite3.connect')
     def test_iscrivi_materia_successo(self, mock_connect):
@@ -80,9 +79,8 @@ class TestStudente:
         assert risultato[0]["professore"] == "Prof. Verdi"
 
 
-# ==========================================
+
 # TEST CLASSE TUTOR
-# ==========================================
 class TestTutor:
     @patch('database.tutor.sqlite3.connect')
     def test_get_materie_tutor(self, mock_connect):

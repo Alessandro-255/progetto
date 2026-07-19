@@ -1,6 +1,5 @@
 import sys
 from PyQt6.QtWidgets import QApplication
-# Ora importiamo la finestra dal package ui
 from ui.login_window import LoginWindow
 
 def avvia_applicazione():

@@ -47,12 +47,10 @@ class Professore(Utente):
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cur = conn.cursor()
-                # Inseriamo la materia includendo il nuovo campo Anno
                 cur.execute("INSERT INTO Materia (Nome, Numero_CFU, COD_PROFESSORE, Anno) VALUES (?, ?, ?, ?)",
                             (nome, cfu, self.id_utente, anno))
                 id_mat = cur.lastrowid
 
-                # Colleghiamo la materia al corso
                 cur.execute("INSERT INTO Corso_Materia (COD_CORSO, COD_MATERIA) VALUES (?, ?)",
                             (id_corso, id_mat))
                 conn.commit()

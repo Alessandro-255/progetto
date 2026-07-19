@@ -10,7 +10,7 @@ from database import (cambia_password, get_materie_tutor, get_info_materia,
                       get_professore_by_materia)
 
 
-# --- CLASSE PERSONALIZZATA PER I QUADRATI DEI CORSI ---
+# CLASSE PERSONALIZZATA PER I QUADRATI DEI CORSI
 class ClickableFrame(QFrame):
     clicked = pyqtSignal()
 
@@ -78,8 +78,8 @@ class TutorDashboard(QWidget):
         self.stacked_widget.addWidget(self.pagina_dettaglio)  # 2
 
         menu_items = [
-            ("🏠 CORSI ASSEGNATI", 0),
-            ("⚙️ IMPOSTAZIONI", 1)
+            ("CORSI ASSEGNATI", 0),
+            ("IMPOSTAZIONI", 1)
         ]
 
         for test, index in menu_items:
@@ -110,9 +110,7 @@ class TutorDashboard(QWidget):
             active_button.setStyleSheet(
                 "background-color: #20B2AA; color: white; text-align: left; padding: 15px; border: none; font-weight: bold; border-radius: 5px;")
 
-    # ==========================================
-    # PAGINA 0: HOME / MATERIE ASSEGNATE
-    # ==========================================
+    # HOME / MATERIE ASSEGNATE
     def _crea_pagina_home(self):
         page = QWidget()
         self.layout_home = QVBoxLayout(page)
@@ -180,9 +178,9 @@ class TutorDashboard(QWidget):
                     c = 0
                     r += 1
 
-    # ==========================================
-    # PAGINA 2: GESTIONE MATERIALE (DETTAGLIO CORSO)
-    # ==========================================
+
+    #GESTIONE MATERIALE (DETTAGLIO CORSO)
+
     def _crea_pagina_dettaglio_corso(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -204,26 +202,26 @@ class TutorDashboard(QWidget):
         self.lbl_titolo_dettaglio.setStyleSheet("color: black; margin-top: 10px;")
         layout.addWidget(self.lbl_titolo_dettaglio)
 
-        # (Codice esistente...)
+
         self.lbl_sottotitolo_corso = QLabel("CORSO DI LAUREA: --")
         self.lbl_sottotitolo_corso.setFont(QFont("Arial", 12))
         self.lbl_sottotitolo_corso.setStyleSheet("color: #555;")
         layout.addWidget(self.lbl_sottotitolo_corso)
 
-        # --- INIZIO NUOVO CODICE ---
+
         self.lbl_professore = QLabel("DOCENTE TITOLARE: --")
         self.lbl_professore.setFont(QFont("Arial", 11, QFont.Weight.Bold))
-        self.lbl_professore.setStyleSheet("color: #0055A4;")  # Un bel blu per farlo risaltare
+        self.lbl_professore.setStyleSheet("color: #0055A4;")
         layout.addWidget(self.lbl_professore)
 
-        layout.addSpacing(20)  # Lo spazio lo mettiamo qui
-        # --- FINE NUOVO CODICE ---
+        layout.addSpacing(20)
 
 
-        # (Il resto del codice continua uguale...)
 
 
-        btn_aggiungi = QPushButton("➕ CARICA NUOVO FILE DIDATTICO")
+
+
+        btn_aggiungi = QPushButton("CARICA NUOVO FILE DIDATTICO")
         btn_aggiungi.setStyleSheet(
             "background-color: #20B2AA; color: white; padding: 12px; font-weight: bold; border-radius: 4px;")
         btn_aggiungi.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -247,14 +245,14 @@ class TutorDashboard(QWidget):
         self.corso_corrente_id = id_materia
         self.corso_corrente_nome = nome_materia
 
-        # Info del corso
+
         info = get_info_materia(id_materia)
         nome_corso_laurea = info[1] if info and info[0] != "Sconosciuto" else "Sconosciuto"
 
-        # Recupera il nome del professore
+
         nome_professore = get_professore_by_materia(id_materia)
 
-        # Aggiorna tutte le scritte
+
         self.lbl_titolo_dettaglio.setText(f"GESTIONE MATERIALE: {nome_materia.upper()}")
         self.lbl_sottotitolo_corso.setText(f"CORSO DI LAUREA: {nome_corso_laurea.upper()}")
         self.lbl_professore.setText(f"DOCENTE TITOLARE: {nome_professore.upper()}")
@@ -288,7 +286,7 @@ class TutorDashboard(QWidget):
                 lbl_nome = QLabel(f"📄 {nome_file}")
                 lbl_nome.setStyleSheet("color: black; border: none; font-size: 14px;")
 
-                btn_elimina = QPushButton("❌ ELIMINA")
+                btn_elimina = QPushButton("ELIMINA")
                 btn_elimina.setStyleSheet(
                     "background-color: #D32F2F; color: white; padding: 6px; border-radius: 4px; font-weight: bold;")
                 btn_elimina.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -342,7 +340,7 @@ class TutorDashboard(QWidget):
         path_relativo = get_path_materiale(id_materiale)
         if path_relativo:
             base_dir = os.path.dirname(os.path.abspath(__file__))
-            # FIX: Aggiunto ".." anche per l'eliminazione fisica del file
+
             path_assoluto = os.path.join(base_dir, "..", path_relativo.replace('/', os.sep))
             path_assoluto = os.path.normpath(path_assoluto)
 
@@ -355,9 +353,9 @@ class TutorDashboard(QWidget):
         elimina_materiale_corso(id_materiale)
         self.ricarica_lista_file()
 
-    # ==========================================
-    # PAGINA 1: IMPOSTAZIONI
-    # ==========================================
+
+    #  IMPOSTAZIONI
+
     def _crea_pagina_impostazioni(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -370,7 +368,7 @@ class TutorDashboard(QWidget):
         header_layout.addWidget(lbl_titolo)
         header_layout.addStretch()
 
-        btn_logout = QPushButton("🚪 ESCI")
+        btn_logout = QPushButton("ESCI")
         btn_logout.setStyleSheet("background-color: transparent; font-size: 16px; font-weight: bold; color: #D32F2F;")
         btn_logout.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_logout.clicked.connect(self.esegui_logout)

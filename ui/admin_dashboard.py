@@ -6,14 +6,12 @@ from PyQt6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QLabel,
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 
-# Importiamo direttamente la nostra classe orientata agli oggetti!
 from database.admin import Admin
 
 
 class AdminDashboard(QWidget):
     def __init__(self, id_utente, nome, cognome):
         super().__init__()
-        # Inizializziamo l'oggetto Admin che si occuperà di tutto il DB
         self.admin = Admin(id_utente, nome, cognome)
 
         self.setWindowTitle("Dashboard Admin - Gestionale UNIVPM")
@@ -26,7 +24,7 @@ class AdminDashboard(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # 1. BARRA LATERALE
+        # BARRA LATERALE
         sidebar = QFrame()
         sidebar.setFixedWidth(220)
         sidebar.setStyleSheet("background-color: white; border-right: 1px solid #ccc;")
@@ -62,8 +60,8 @@ class AdminDashboard(QWidget):
         self.stacked_widget.addWidget(self.pagina_impostazioni)
 
         menu_items = [
-            ("👥 GESTIONE UTENTI", 0),
-            ("⚙️ IMPOSTAZIONI", 1)
+            ("GESTIONE UTENTI", 0),
+            ("IMPOSTAZIONI", 1)
         ]
 
         for test, index in menu_items:
@@ -92,9 +90,9 @@ class AdminDashboard(QWidget):
             active_button.setStyleSheet(
                 "background-color: #20B2AA; color: white; text-align: left; padding: 15px; border: none; font-weight: bold; border-radius: 5px;")
 
-    # ==========================================
-    # PAGINA 0: GESTIONE UTENTI E ASSEGNAZIONI (CRUD)
-    # ==========================================
+
+    # GESTIONE UTENTI E ASSEGNAZIONI
+
     def _crea_pagina_gestione_utenti(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -109,14 +107,14 @@ class AdminDashboard(QWidget):
         tabs = QTabWidget()
         tabs.setStyleSheet("background-color: white; color: black;")
 
-        tabs.addTab(self._tab_crea_utente(), "➕ Crea Nuovo Utente")
-        tabs.addTab(self._tab_modifica_elimina(), "✏️ Modifica/Elimina Utente")
-        tabs.addTab(self._tab_assegnazioni(), "🔗 Assegnazioni Corsi")
+        tabs.addTab(self._tab_crea_utente(), "Crea Nuovo Utente")
+        tabs.addTab(self._tab_modifica_elimina(), "Modifica/Elimina Utente")
+        tabs.addTab(self._tab_assegnazioni(), "Assegnazioni Corsi")
 
         layout.addWidget(tabs)
         return page
 
-    # --- TAB 1: CREATE ---
+    # CREATE
     def _tab_crea_utente(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
@@ -187,7 +185,7 @@ class AdminDashboard(QWidget):
             QMessageBox.warning(self, "Attenzione", "Tutti i campi anagrafici sono obbligatori.")
             return
 
-        # Deleghiamo la creazione all'oggetto Admin!
+
         successo, msg = self.admin.salva_nuovo_utente(ruolo, nome, cognome, email, cf, password, matricola, id_corso)
 
         if successo:
@@ -202,7 +200,7 @@ class AdminDashboard(QWidget):
         else:
             QMessageBox.critical(self, "Errore", msg)
 
-    # --- TAB 2: UPDATE & DELETE ---
+    # MODIFICA E ELIMINA
     def _tab_modifica_elimina(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
@@ -226,12 +224,12 @@ class AdminDashboard(QWidget):
 
         btn_layout = QHBoxLayout()
 
-        btn_elimina = QPushButton("🗑️ ELIMINA UTENTE")
+        btn_elimina = QPushButton(" ELIMINA UTENTE")
         btn_elimina.setStyleSheet("background-color: #D32F2F; color: white; font-weight: bold; padding: 12px; border-radius: 4px;")
         btn_elimina.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_elimina.clicked.connect(self.elimina_utente)
 
-        btn_aggiorna = QPushButton("💾 SALVA MODIFICHE")
+        btn_aggiorna = QPushButton("SALVA MODIFICHE")
         btn_aggiorna.setStyleSheet("background-color: #20B2AA; color: white; font-weight: bold; padding: 12px; border-radius: 4px;")
         btn_aggiorna.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_aggiorna.clicked.connect(self.salva_modifiche_utente)
@@ -292,13 +290,12 @@ class AdminDashboard(QWidget):
             else:
                 QMessageBox.critical(self, "Errore", msg)
 
-    # --- TAB 3: ASSEGNAZIONI DOCENTI E TUTOR ---
+    # ASSEGNAZIONI DOCENTI E TUTOR
     def _tab_assegnazioni(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(20, 20, 20, 20)
 
-        # Combo per scegliere il docente/tutor
         selez_layout = QHBoxLayout()
         selez_layout.addWidget(QLabel("<b>Seleziona Docente o Tutor:</b>"))
         self.combo_utenti_assegnazioni = QComboBox()
@@ -307,7 +304,7 @@ class AdminDashboard(QWidget):
         layout.addLayout(selez_layout)
         layout.addSpacing(10)
 
-        # Tabella di visualizzazione
+
         self.tabella_assegnazioni = QTableWidget()
         self.tabella_assegnazioni.setColumnCount(2)
         self.tabella_assegnazioni.setHorizontalHeaderLabels(["CORSO DI LAUREA ASSEGNATO", "AZIONI"])
@@ -317,11 +314,11 @@ class AdminDashboard(QWidget):
         layout.addWidget(self.tabella_assegnazioni)
         layout.addSpacing(10)
 
-        # Controlli per aggiungere nuovo corso
+
         add_layout = QHBoxLayout()
         add_layout.addWidget(QLabel("<b>Nuovo Corso da Assegnare:</b>"))
         self.combo_nuovo_corso = QComboBox()
-        btn_aggiungi_corso = QPushButton("➕ AGGIUNGI CORSO")
+        btn_aggiungi_corso = QPushButton("AGGIUNGI CORSO")
         btn_aggiungi_corso.setStyleSheet("background-color: #FF8C00; color: white; font-weight: bold; padding: 6px; border-radius: 4px;")
         btn_aggiungi_corso.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_aggiungi_corso.clicked.connect(self.aggiungi_assegnazione)
@@ -352,7 +349,7 @@ class AdminDashboard(QWidget):
             item.setFlags(Qt.ItemFlag.ItemIsEnabled)
             self.tabella_assegnazioni.setItem(riga, 0, item)
 
-            btn_rimuovi = QPushButton("❌ REVOCA ACCESSO")
+            btn_rimuovi = QPushButton("REVOCA ACCESSO")
             btn_rimuovi.setStyleSheet("background-color: #D32F2F; color: white; padding: 4px;")
             btn_rimuovi.setCursor(Qt.CursorShape.PointingHandCursor)
             btn_rimuovi.clicked.connect(lambda checked, c_id=id_corso, r=ruolo, u=id_u: self.rimuovi_assegnazione(u, r, c_id))
@@ -385,9 +382,9 @@ class AdminDashboard(QWidget):
             else:
                 QMessageBox.critical(self, "Errore", msg)
 
-    # --- RICARICA GLOBALE DEI DATI DELLE COMBOBOX ---
+    # RICARICA GLOBALE DEI DATI DELLE COMBOBOX
     def ricarica_dati_admin(self):
-        # 1. Carica corsi per Creazione e Assegnazione
+
         self.combo_corso_associato.blockSignals(True)
         self.combo_nuovo_corso.blockSignals(True)
         self.combo_corso_associato.clear()
@@ -401,7 +398,7 @@ class AdminDashboard(QWidget):
         self.combo_corso_associato.blockSignals(False)
         self.combo_nuovo_corso.blockSignals(False)
 
-        # 2. Carica TUTTI gli utenti per Modifica/Elimina
+
         self.combo_utenti_modifica.blockSignals(True)
         self.combo_utenti_modifica.clear()
 
@@ -411,7 +408,7 @@ class AdminDashboard(QWidget):
 
         self.combo_utenti_modifica.blockSignals(False)
 
-        # 3. Carica SOLO Professori e Tutor per le Assegnazioni
+
         self.combo_utenti_assegnazioni.blockSignals(True)
         self.combo_utenti_assegnazioni.clear()
 
@@ -421,13 +418,13 @@ class AdminDashboard(QWidget):
 
         self.combo_utenti_assegnazioni.blockSignals(False)
 
-        # Aggiorniamo i campi a schermo in base alle nuove combo
+
         self._carica_dati_modifica()
         self._carica_tabella_assegnazioni()
 
-    # ==========================================
-    # PAGINA 1: IMPOSTAZIONI (CAMBIO PASSWORD / LOGOUT)
-    # ==========================================
+
+    # IMPOSTAZIONI (CAMBIO PASSWORD / LOGOUT)
+
     def _crea_pagina_impostazioni(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -440,7 +437,7 @@ class AdminDashboard(QWidget):
         header_layout.addWidget(lbl_titolo)
         header_layout.addStretch()
 
-        btn_logout = QPushButton("🚪 ESCI")
+        btn_logout = QPushButton("ESCI")
         btn_logout.setStyleSheet("background-color: transparent; font-size: 16px; font-weight: bold; color: #D32F2F;")
         btn_logout.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_logout.clicked.connect(self.esegui_logout)
@@ -501,7 +498,6 @@ class AdminDashboard(QWidget):
             QMessageBox.warning(self, "Attenzione", "Le nuove password non coincidono.")
             return
 
-        # Sfruttiamo il metodo ereditato direttamente dall'oggetto Utente/Admin!
         successo, messaggio = self.admin.cambia_password(pwd_attuale, pwd_nuova)
 
         if successo:

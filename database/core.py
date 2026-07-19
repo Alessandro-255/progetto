@@ -1,7 +1,7 @@
 import sqlite3
 import os
 
-# Punta alla cartella principale del progetto
+#PATH Cartella
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(BASE_DIR, 'GestioneUniversita.db')
 

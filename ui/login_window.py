@@ -3,10 +3,8 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QLineEdit,
 from PyQt6.QtCore import Qt
 from .tutor_dashboard import TutorDashboard
 
-# Importiamo la factory dal package database
 from database.auth import autentica
 
-# Importiamo le dashboard dal nostro stesso package
 from .student_dashboard import StudentDashboard
 from .dashboard_professore import ProfessorDashboard
 from .admin_dashboard import AdminDashboard

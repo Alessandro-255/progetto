@@ -6,18 +6,14 @@ from .admin import Admin
 from .tutor import Tutor
 from .auth import autentica
 
-# Alias nel caso qualche dashboard usi il vecchio nome
 autentica_utente = autentica
 
-# ==========================================
-# BRIDGE (FACCIATA) PER LE DASHBOARD
-# ==========================================
+
 
 def cambia_password(id_utente, vecchia, nuova):
     # Creiamo un utente fittizio solo per sfruttare il suo metodo
     return Utente(id_utente, "", "").cambia_password(vecchia, nuova)
 
-# --- FUNZIONI STUDENTE ---
 def get_dati_studente(id_utente):
     with sqlite3.connect(DB_PATH) as conn:
         cur = conn.cursor()
@@ -75,7 +71,7 @@ def set_stato_dsa(id_utente, stato):
     except sqlite3.Error:
         return False
 
-# --- FUNZIONI PROFESSORE E CORSI ---
+#  PROFESSORE E CORSI
 def get_corsi_professore(id_utente):
     return Professore(id_utente, "", "").get_corsi_professore()
 
@@ -135,7 +131,7 @@ def elimina_materiale_corso(id_materiale):
         cur.execute("DELETE FROM Materiale WHERE ID_MATERIALE = ?", (id_materiale,))
         conn.commit()
 
-        # --- FUNZIONI TUTOR ---
+        #  TUTOR --
 def get_materie_tutor(id_utente):
     return Tutor(id_utente, "", "").get_materie_tutor()
 

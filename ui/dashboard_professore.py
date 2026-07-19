@@ -7,7 +7,7 @@ from PyQt6.QtGui import QFont
 from database import *
 
 
-# --- CLASSE PERSONALIZZATA PER I QUADRATI DEI CORSI ---
+# CLASSE PERSONALIZZATA PER I QUADRATI DEI CORSI
 class ClickableFrame(QFrame):
     clicked = pyqtSignal()
 
@@ -16,16 +16,15 @@ class ClickableFrame(QFrame):
         super().mousePressEvent(event)
 
 
-# ==========================================
 # POPUP (QDIALOG) PER CREARE LA NUOVA MATERIA
-# ==========================================
+
 
 class DialogNuovaMateria(QDialog):
     def __init__(self, professore_obj, parent=None):
         super().__init__(parent)
         self.prof = professore_obj
         self.setWindowTitle("Crea Nuova Materia")
-        self.setFixedSize(450, 300)  # Leggermente più alto per l'Anno
+        self.setFixedSize(450, 300)
 
         layout = QVBoxLayout(self)
 
@@ -38,14 +37,14 @@ class DialogNuovaMateria(QDialog):
 
         self.combo_corso = QComboBox()
 
-        # FIX LOGICA: Carichiamo solo i corsi a cui il professore è stato assegnato dall'Admin
+
         self.corsi_disponibili = self.prof.get_corsi_assegnati()
 
         if not self.corsi_disponibili:
             self.combo_corso.addItem("-- Nessun corso assegnato --", None)
         else:
             for c in self.corsi_disponibili:
-                # FIX KEYERROR: Usiamo la chiave 'id' corretta restituita dal DB
+
                 self.combo_corso.addItem(c['nome'], c['id'])
 
         self.input_nome = QLineEdit()
@@ -55,7 +54,7 @@ class DialogNuovaMateria(QDialog):
         self.input_cfu.setRange(1, 18)
         self.input_cfu.setValue(6)
 
-        # FIX SCHEMA DB: Aggiunto l'input per l'Anno
+
         self.input_anno = QSpinBox()
         self.input_anno.setRange(1, 5)
         self.input_anno.setValue(1)
@@ -95,7 +94,7 @@ class DialogNuovaMateria(QDialog):
             QMessageBox.warning(self, "Attenzione", "Devi inserire il nome della materia.")
             return
 
-        # Sfruttiamo il metodo OOP incapsulato
+
         successo, msg = self.prof.crea_nuova_materia(nome_materia, cfu, anno, id_corso_laurea)
 
         if successo:
@@ -120,9 +119,8 @@ class DialogNuovaMateria(QDialog):
         else:
             QMessageBox.critical(self, "Errore Database", msg)
 
-# ==========================================
-# POPUP (QDIALOG) PER LA CREAZIONE APPELLO
-# ==========================================
+#  CREAZIONE APPELLO
+
 class DialogCreaAppello(QDialog):
     def __init__(self, id_materia, nome_materia, parent=None):
         super().__init__(parent)
@@ -211,19 +209,19 @@ class DialogCreaAppello(QDialog):
             QMessageBox.critical(self, "Errore DB", f"Impossibile salvare l'appello:\n{e}")
 
 
-# ==========================================
-# POPUP (QDIALOG) PER GESTIRE I TUTOR DEL CORSO
-# ==========================================
+
+# GESTIONE  TUTOR DEL CORSO
+
 class DialogGestisciTutor(QDialog):
     def __init__(self, id_materia, nome_materia, parent=None):
         super().__init__(parent)
         self.id_materia = id_materia
 
-        # Recupera il nome del corso di laurea associato alla materia
+
         info = get_info_materia(id_materia)
         self.nome_corso = info[1] if info and info[0] != "Sconosciuto" else "Corso Generale"
 
-        # Trova l'ID del corso di laurea
+
         self.id_corso = self._trova_id_corso()
 
         self.setWindowTitle(f"Gestione Tutor - {self.nome_corso}")
@@ -236,7 +234,7 @@ class DialogGestisciTutor(QDialog):
         layout.addWidget(lbl_titolo)
         layout.addSpacing(10)
 
-        # Tabella dei tutor attuali del corso
+
         self.tabella_tutor = QTableWidget()
         self.tabella_tutor.setColumnCount(3)
         self.tabella_tutor.setHorizontalHeaderLabels(["ID", "NOME", "COGNOME"])
@@ -246,12 +244,12 @@ class DialogGestisciTutor(QDialog):
 
         layout.addSpacing(15)
 
-        # Sezione per aggiungere un nuovo tutor al corso
+
         aggiungi_layout = QHBoxLayout()
         self.combo_tutor_disponibili = QComboBox()
         self.combo_tutor_disponibili.setStyleSheet("background-color: white; padding: 6px; color: black;")
 
-        btn_aggiungi = QPushButton("➕ AGGIUNGI AL CORSO")
+        btn_aggiungi = QPushButton("AGGIUNGI AL CORSO")
         btn_aggiungi.setStyleSheet(
             "background-color: #20B2AA; color: white; font-weight: bold; padding: 6px 12px; border-radius: 4px;")
         btn_aggiungi.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -309,7 +307,7 @@ class DialogGestisciTutor(QDialog):
                     self.tabella_tutor.setItem(riga, 1, it1)
                     self.tabella_tutor.setItem(riga, 2, it2)
 
-            # 2. Carica nel menu a tendina i tutor NON ancora associati a questo corso
+
             self.combo_tutor_disponibili.clear()
             cur.execute("""
                         SELECT u.ID_UTENTE, u.Nome, u.Cognome
@@ -351,9 +349,9 @@ class DialogGestisciTutor(QDialog):
             QMessageBox.critical(self, "Errore DB", f"Impossibile associare il tutor:\n{e}")
 
 
-# ==========================================
-# POPUP (QDIALOG) PER LA REGISTRAZIONE VOTI E CHIUSURA APPELLO
-# ==========================================
+
+#  REGISTRAZIONE VOTI E CHIUSURA APPELLO
+
 class DialogChiusuraAppello(QDialog):
     def __init__(self, id_appello, nome_materia, parent=None):
         super().__init__(parent)
@@ -436,7 +434,7 @@ class DialogChiusuraAppello(QDialog):
                 item_nome.setFlags(Qt.ItemFlag.ItemIsEnabled)
                 self.tabella_iscritti.setItem(riga, 1, item_nome)
 
-                # ComboBox Voto
+                #  Voto
                 combo = QComboBox()
                 combo.setStyleSheet("background-color: white; color: black; padding: 4px;")
                 combo.addItem("Respinto", "Respinto")
@@ -470,28 +468,28 @@ class DialogChiusuraAppello(QDialog):
                     voto_selezionato = combo.currentData()
 
                     if voto_selezionato == "Respinto":
-                        # Inseriamo solo l'esito negativo
+
                         cur.execute(
                             "INSERT INTO Esito_Appello_Studente (COD_APPELLO, COD_STUDENTE, Voto_Ottenuto, Stato) VALUES (?, ?, NULL, 'Respinto')",
                             (self.id_appello, id_studente)
                         )
                     else:
                         voto_num = int(voto_selezionato)
-                        # Inseriamo nei voti da verbalizzare (lo studente deciderà se accettarlo o meno)
+
                         cur.execute(
                             "INSERT INTO Voto_Da_Verbalizzare (COD_STUDENTE, COD_APPELLO, Voto_Proposto) VALUES (?, ?, ?)",
                             (id_studente, self.id_appello, voto_num)
                         )
-                        # Inseriamo l'esito positivo
+
                         cur.execute(
                             "INSERT INTO Esito_Appello_Studente (COD_APPELLO, COD_STUDENTE, Voto_Ottenuto, Stato) VALUES (?, ?, ?, 'Superato')",
                             (self.id_appello, id_studente, voto_num)
                         )
 
-                    # Rimuoviamo la prenotazione dello studente dato che l'appello è concluso
+
                     cur.execute("DELETE FROM Prenotazione WHERE COD_STUDENTE = ? AND COD_APPELLO = ?", (id_studente, self.id_appello))
 
-            # Chiudiamo l'appello
+
             cur.execute("UPDATE Appello SET Chiuso = TRUE WHERE ID_APPELLO = ?", (self.id_appello,))
 
             conn.commit()
@@ -504,9 +502,9 @@ class DialogChiusuraAppello(QDialog):
             QMessageBox.critical(self, "Errore", f"Si è verificato un errore durante il salvataggio dei voti:\n{e}")
 
 
-# ==========================================
-# POPUP (QDIALOG) PER VISUALIZZARE STATISTICHE APPELLO CHIUSO
-# ==========================================
+
+# STATISTICHE APPELLO CHIUSO
+
 class DialogStatisticheAppello(QDialog):
     def __init__(self, id_materia, nome_materia, parent=None):
         super().__init__(parent)
@@ -604,7 +602,7 @@ class DialogStatisticheAppello(QDialog):
                 perc_superati = (superati / totale) * 100
                 perc_bocciati = (bocciati / totale) * 100
                 testo = (
-                    f"<b>📊 STATISTICHE APPELLO ID: {id_appello}</b><br><br>"
+                    f"<b> STATISTICHE APPELLO ID: {id_appello}</b><br><br>"
                     f"• <b>Totale Studenti Valutati:</b> {totale}<br>"
                     f"• <span style='color:green;'><b>Hanno passato l'esame (≥ 18):</b></span> {superati} ({perc_superati:.1f}%)<br>"
                     f"• <span style='color:red;'><b>Non superato (< 18):</b></span> {bocciati} ({perc_bocciati:.1f}%)<br><br>"
@@ -619,10 +617,9 @@ class DialogStatisticheAppello(QDialog):
             self.lbl_risultati_stat.setText(f"Errore calcolo statistiche: {e}")
 
 
-# ==========================================
+
 # DASHBOARD PRINCIPALE DEL PROFESSORE
-# ==========================================
-# Aggiungi questo import in alto, vicino agli altri
+
 from database.professore import Professore
 
 
@@ -684,15 +681,15 @@ class ProfessorDashboard(QWidget):
         self.pagina_impostazioni = self._crea_pagina_impostazioni()
         self.pagina_dettaglio = self._crea_pagina_dettaglio_corso()
 
-        self.stacked_widget.addWidget(self.pagina_home)  # Indice 0
-        self.stacked_widget.addWidget(self.pagina_appelli)  # Indice 1 (Gestione Appelli Aperti)
-        self.stacked_widget.addWidget(self.pagina_impostazioni)  # Indice 2 (Impostazioni)
-        self.stacked_widget.addWidget(self.pagina_dettaglio)  # Indice 3 (Gestione Materia)
+        self.stacked_widget.addWidget(self.pagina_home)
+        self.stacked_widget.addWidget(self.pagina_appelli)
+        self.stacked_widget.addWidget(self.pagina_impostazioni)
+        self.stacked_widget.addWidget(self.pagina_dettaglio)
 
         menu_items = [
-            ("🏠 HOME / LE MIE MATERIE", 0),
-            ("📅 GESTIONE APPELLI", 1),
-            ("⚙️ IMPOSTAZIONI", 2)
+            ("HOME / LE MIE MATERIE", 0),
+            ("GESTIONE APPELLI", 1),
+            ("IMPOSTAZIONI", 2)
         ]
 
         for test, index in menu_items:
@@ -727,9 +724,9 @@ class ProfessorDashboard(QWidget):
             active_button.setStyleSheet(
                 "background-color: #20B2AA; color: white; text-align: left; padding: 15px; border: none; font-weight: bold; border-radius: 5px;")
 
-    # ==========================================
-    # PAGINA 0: HOME / LE MIE MATERIE
-    # ==========================================
+
+    # HOME / LE MIE MATERIE
+
     def _crea_pagina_home(self):
         page = QWidget()
         self.layout_home = QVBoxLayout(page)
@@ -741,7 +738,7 @@ class ProfessorDashboard(QWidget):
         lbl_titolo.setFont(QFont("Arial", 14, QFont.Weight.Bold))
         lbl_titolo.setStyleSheet("color: black;")
 
-        btn_nuova_materia = QPushButton("➕ NUOVA MATERIA")
+        btn_nuova_materia = QPushButton(" NUOVA MATERIA")
         btn_nuova_materia.setStyleSheet("""
             background-color: #0055A4; 
             color: white; 
@@ -822,9 +819,9 @@ class ProfessorDashboard(QWidget):
                     c = 0
                     r += 1
 
-    # ==========================================
-    # PAGINA 1: GESTIONE APPELLI (SOLO APERTI)
-    # ==========================================
+
+    # PAGINA 1: GESTIONE APPELLI
+
     def _crea_pagina_appelli(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -848,7 +845,7 @@ class ProfessorDashboard(QWidget):
         self.combo_filtro_materia.addItem("-- Seleziona prima il Corso --", None)
         self.combo_filtro_materia.setEnabled(False)
 
-        btn_ricerca = QPushButton("🔍 AVVIA RICERCA")
+        btn_ricerca = QPushButton("AVVIA RICERCA")
         btn_ricerca.setStyleSheet(
             "background-color: #0055A4; color: white; font-weight: bold; padding: 8px 15px; border-radius: 4px;")
         btn_ricerca.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -990,14 +987,14 @@ class ProfessorDashboard(QWidget):
                 ly_az = QHBoxLayout(box_azioni)
                 ly_az.setContentsMargins(2, 2, 2, 2)
 
-                btn_chiudi = QPushButton("📁 REGISTRA")
+                btn_chiudi = QPushButton("REGISTRA")
                 btn_chiudi.setStyleSheet(
                     "background-color: #20B2AA; color: white; padding: 4px; font-weight: bold; border-radius: 3px;")
                 btn_chiudi.setCursor(Qt.CursorShape.PointingHandCursor)
                 btn_chiudi.clicked.connect(
                     lambda ch, id_app=id_appello, m_nome=nome_materia: self.apri_chiusura_appello(id_app, m_nome))
 
-                btn_elimina = QPushButton("❌ ELIMINA")
+                btn_elimina = QPushButton("ELIMINA")
                 btn_elimina.setStyleSheet(
                     "background-color: #D32F2F; color: white; padding: 4px; font-weight: bold; border-radius: 3px;")
                 btn_elimina.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1036,9 +1033,9 @@ class ProfessorDashboard(QWidget):
         item.setFlags(Qt.ItemFlag.ItemIsEnabled)
         tabella.setItem(riga, colonna, item)
 
-    # ==========================================
+
     # PAGINA 2: IMPOSTAZIONI
-    # ==========================================
+
     def _crea_pagina_impostazioni(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -1051,7 +1048,7 @@ class ProfessorDashboard(QWidget):
         header_layout.addWidget(lbl_titolo)
         header_layout.addStretch()
 
-        btn_logout = QPushButton("🚪 ESCI")
+        btn_logout = QPushButton("ESCI")
         btn_logout.setStyleSheet("background-color: transparent; font-size: 16px; font-weight: bold; color: #D32F2F;")
         btn_logout.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_logout.clicked.connect(self.esegui_logout)
@@ -1133,9 +1130,9 @@ class ProfessorDashboard(QWidget):
         self.login.show()
         self.close()
 
-    # ==========================================
+
     # PAGINA 3: DETTAGLIO MATERIA E MATERIALE + STATISTICHE + GESTISCI TUTOR
-    # ==========================================
+
     def _crea_pagina_dettaglio_corso(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -1149,19 +1146,19 @@ class ProfessorDashboard(QWidget):
         btn_indietro.clicked.connect(lambda: self.cambia_pagina(0, list(self.menu_buttons.keys())[0]))
 
         # BOTTONE GESTISCI TUTOR
-        btn_tutor = QPushButton("👥 GESTISCI TUTOR")
+        btn_tutor = QPushButton(" GESTISCI TUTOR")
         btn_tutor.setStyleSheet(
             "background-color: #6A5ACD; color: white; padding: 10px; font-weight: bold; border-radius: 5px;")
         btn_tutor.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_tutor.clicked.connect(self.apri_gestione_tutor)
 
-        btn_statistiche = QPushButton("📊 STATISTICHE APPELLI")
+        btn_statistiche = QPushButton("STATISTICHE APPELLI")
         btn_statistiche.setStyleSheet(
             "background-color: #8A2BE2; color: white; padding: 10px; font-weight: bold; border-radius: 5px;")
         btn_statistiche.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_statistiche.clicked.connect(self.apri_statistiche_appelli)
 
-        btn_appello = QPushButton("📅 CREAZIONE APPELLO")
+        btn_appello = QPushButton("CREAZIONE APPELLO")
         btn_appello.setStyleSheet(
             "background-color: #FF8C00; color: white; padding: 10px; font-weight: bold; border-radius: 5px;")
         btn_appello.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1190,7 +1187,7 @@ class ProfessorDashboard(QWidget):
         lbl_mat.setStyleSheet("color: black;")
         layout.addWidget(lbl_mat)
 
-        btn_aggiungi = QPushButton("➕ AGGIUNGI FILE")
+        btn_aggiungi = QPushButton("AGGIUNGI FILE")
         btn_aggiungi.setStyleSheet(
             "background-color: #20B2AA; color: white; padding: 8px; font-weight: bold; border-radius: 4px;")
         btn_aggiungi.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1210,7 +1207,7 @@ class ProfessorDashboard(QWidget):
 
         return page
 
-    # --- AZIONI DEL DETTAGLIO CORSO ---
+    #   DETTAGLIO CORSO
 
     def apri_creazione_materia(self):
         dialog = DialogNuovaMateria(self.professore, self)
@@ -1265,7 +1262,7 @@ class ProfessorDashboard(QWidget):
 
         materiali = get_materiale_corso(self.corso_corrente_id)
         if not materiali:
-            lbl = QLabel("Nessun file caricato per questa materia. Clicca su '➕ AGGIUNGI FILE' per caricarne uno.")
+            lbl = QLabel("Nessun file caricato per questa materia. Clicca su 'AGGIUNGI FILE' per caricarne uno.")
             lbl.setStyleSheet("color: #666; font-size: 14px; font-style: italic;")
             self.layout_lista_file.addWidget(lbl)
         else:
@@ -1276,10 +1273,10 @@ class ProfessorDashboard(QWidget):
                 ly = QHBoxLayout(riga)
 
                 nome_file = os.path.basename(mat['file'])
-                lbl_nome = QLabel(f"📄 {nome_file}")
+                lbl_nome = QLabel(f" {nome_file}")
                 lbl_nome.setStyleSheet("color: black; border: none; font-size: 14px;")
 
-                btn_elimina = QPushButton("❌ ELIMINA")
+                btn_elimina = QPushButton("ELIMINA")
                 btn_elimina.setStyleSheet(
                     "background-color: #D32F2F; color: white; padding: 6px; border-radius: 4px; font-weight: bold;")
                 btn_elimina.setCursor(Qt.CursorShape.PointingHandCursor)

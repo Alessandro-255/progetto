@@ -19,7 +19,7 @@ class Admin(Utente):
         utenti = []
         with sqlite3.connect(DB_PATH) as conn:
             cur = conn.cursor()
-            # Escludiamo l'admin stesso per evitare auto-eliminazioni accidentali
+
             cur.execute("SELECT ID_UTENTE, Nome, Cognome FROM Utente WHERE Email != 'admin@uni.it'")
             for r in cur.fetchall():
                 utenti.append({"id": r[0], "nome": r[1], "cognome": r[2]})
@@ -87,7 +87,7 @@ class Admin(Utente):
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cur = conn.cursor()
-                cur.execute("PRAGMA foreign_keys = ON;") # Attiva eliminazione a cascata
+                cur.execute("PRAGMA foreign_keys = ON;")
                 cur.execute("DELETE FROM Utente WHERE ID_UTENTE = ?", (id_u,))
                 conn.commit()
             return True, "L'utente è stato eliminato dal database con tutti i dati associati."

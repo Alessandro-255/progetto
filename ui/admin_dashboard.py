@@ -41,7 +41,7 @@ class AdminDashboard(QWidget):
         lbl_nome.setFont(QFont("Arial", 10, QFont.Weight.Bold))
         lbl_nome.setStyleSheet("border: none; color: black;")
 
-        lbl_ruolo = QLabel("Segreteria / ESSE3")
+        lbl_ruolo = QLabel("Segreteria")
         lbl_ruolo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_ruolo.setStyleSheet("border: none; color: #666; margin-bottom: 20px;")
 
@@ -105,7 +105,63 @@ class AdminDashboard(QWidget):
         layout.addSpacing(10)
 
         tabs = QTabWidget()
-        tabs.setStyleSheet("background-color: white; color: black;")
+
+        # CSS FORZATO: Testo nero ovunque (nei tab, nelle caselle di testo e nei menu a tendina)
+        tabs.setStyleSheet("""
+            QTabWidget::pane {
+                background-color: white;
+                border: 1px solid #ccc;
+            }
+            QTabBar::tab {
+                background-color: #E0E0E0;
+                color: black;
+                padding: 10px 20px;
+                margin-right: 2px;
+                border: 1px solid #ccc;
+                border-bottom: none;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
+            }
+            QTabBar::tab:selected {
+                background-color: white;
+                color: #0055A4;
+                font-weight: bold;
+            }
+            QTabBar::tab:!selected {
+                background-color: #D3D3D3;
+                color: #111111;
+            }
+            QTabBar::tab:hover {
+                background-color: #C0C0C0;
+            }
+
+            /* FORZIAMO I CAMPI DOVE SI INSERISCONO I DATI (scritte nere e sfondo bianco) */
+            QLineEdit {
+                background-color: #FFFFFF;
+                color: #000000;
+                border: 1px solid #ccc;
+                padding: 6px;
+                border-radius: 4px;
+            }
+            QComboBox {
+                background-color: #FFFFFF;
+                color: #000000;
+                border: 1px solid #ccc;
+                padding: 6px;
+                border-radius: 4px;
+            }
+            /* Stile per la lista che scende quando clicchi il menu a tendina */
+            QComboBox QAbstractItemView {
+                background-color: #FFFFFF;
+                color: #000000;
+                selection-background-color: #20B2AA;
+                selection-color: #FFFFFF;
+            }
+            /* Assicuriamoci che anche le etichette siano nere */
+            QLabel {
+                color: black;
+            }
+        """)
 
         tabs.addTab(self._tab_crea_utente(), "Crea Nuovo Utente")
         tabs.addTab(self._tab_modifica_elimina(), "Modifica/Elimina Utente")
@@ -153,7 +209,8 @@ class AdminDashboard(QWidget):
         layout.addSpacing(20)
 
         btn_crea = QPushButton("REGISTRA UTENTE NEL SISTEMA")
-        btn_crea.setStyleSheet("background-color: #0055A4; color: white; font-weight: bold; padding: 12px; border-radius: 4px;")
+        btn_crea.setStyleSheet(
+            "background-color: #0055A4; color: white; font-weight: bold; padding: 12px; border-radius: 4px;")
         btn_crea.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_crea.clicked.connect(self.salva_nuovo_utente)
         layout.addWidget(btn_crea)
@@ -225,12 +282,14 @@ class AdminDashboard(QWidget):
         btn_layout = QHBoxLayout()
 
         btn_elimina = QPushButton(" ELIMINA UTENTE")
-        btn_elimina.setStyleSheet("background-color: #D32F2F; color: white; font-weight: bold; padding: 12px; border-radius: 4px;")
+        btn_elimina.setStyleSheet(
+            "background-color: #D32F2F; color: white; font-weight: bold; padding: 12px; border-radius: 4px;")
         btn_elimina.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_elimina.clicked.connect(self.elimina_utente)
 
         btn_aggiorna = QPushButton("SALVA MODIFICHE")
-        btn_aggiorna.setStyleSheet("background-color: #20B2AA; color: white; font-weight: bold; padding: 12px; border-radius: 4px;")
+        btn_aggiorna.setStyleSheet(
+            "background-color: #20B2AA; color: white; font-weight: bold; padding: 12px; border-radius: 4px;")
         btn_aggiorna.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_aggiorna.clicked.connect(self.salva_modifiche_utente)
 
@@ -319,7 +378,8 @@ class AdminDashboard(QWidget):
         add_layout.addWidget(QLabel("<b>Nuovo Corso da Assegnare:</b>"))
         self.combo_nuovo_corso = QComboBox()
         btn_aggiungi_corso = QPushButton("AGGIUNGI CORSO")
-        btn_aggiungi_corso.setStyleSheet("background-color: #FF8C00; color: white; font-weight: bold; padding: 6px; border-radius: 4px;")
+        btn_aggiungi_corso.setStyleSheet(
+            "background-color: #FF8C00; color: white; font-weight: bold; padding: 6px; border-radius: 4px;")
         btn_aggiungi_corso.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_aggiungi_corso.clicked.connect(self.aggiungi_assegnazione)
 
@@ -352,7 +412,8 @@ class AdminDashboard(QWidget):
             btn_rimuovi = QPushButton("REVOCA ACCESSO")
             btn_rimuovi.setStyleSheet("background-color: #D32F2F; color: white; padding: 4px;")
             btn_rimuovi.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn_rimuovi.clicked.connect(lambda checked, c_id=id_corso, r=ruolo, u=id_u: self.rimuovi_assegnazione(u, r, c_id))
+            btn_rimuovi.clicked.connect(
+                lambda checked, c_id=id_corso, r=ruolo, u=id_u: self.rimuovi_assegnazione(u, r, c_id))
 
             self.tabella_assegnazioni.setCellWidget(riga, 1, btn_rimuovi)
 
@@ -414,7 +475,8 @@ class AdminDashboard(QWidget):
 
         utenti_ass = self.admin.get_utenti_assegnazioni()
         for u in utenti_ass:
-            self.combo_utenti_assegnazioni.addItem(f"[{u['ruolo']}] {u['nome']} {u['cognome']}", {"id": u['id'], "ruolo": u['ruolo']})
+            self.combo_utenti_assegnazioni.addItem(f"[{u['ruolo']}] {u['nome']} {u['cognome']}",
+                                                   {"id": u['id'], "ruolo": u['ruolo']})
 
         self.combo_utenti_assegnazioni.blockSignals(False)
 

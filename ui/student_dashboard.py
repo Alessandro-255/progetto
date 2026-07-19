@@ -6,26 +6,26 @@ from PyQt6.QtWidgets import *
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 
-
+# Importiamo l'architettura OOP
 from database.core import DB_PATH
 from database.studente import Studente
 
 
+# --- CLASSE PERSONALIZZATA PER RENDERE CLICCABILI I QUADRATI ---
 class ClickableFrame(QFrame):
     clicked = pyqtSignal()
-
     def mousePressEvent(self, event):
         self.clicked.emit()
         super().mousePressEvent(event)
 
 
-
+# ===============================================================
 
 class StudentDashboard(QWidget):
     def __init__(self, id_utente, nome, cognome):
         super().__init__()
 
-
+        # Recuperiamo matricola e dsa dal DB per inizializzare l'oggetto Studente
         matricola = ""
         dsa = None
         with sqlite3.connect(DB_PATH) as conn:
@@ -35,7 +35,7 @@ class StudentDashboard(QWidget):
             if res:
                 matricola, dsa = res
 
-
+        # Inizializziamo l'oggetto Studente (OOP)
         self.studente = Studente(id_utente, nome, cognome, matricola, dsa)
         self.corso_laurea = self.get_corso_laurea()
 
@@ -64,7 +64,7 @@ class StudentDashboard(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-
+        # 1. BARRA LATERALE
         sidebar = QFrame()
         sidebar.setFixedWidth(220)
         sidebar.setStyleSheet("background-color: white; border-right: 1px solid #ccc;")
@@ -96,7 +96,6 @@ class StudentDashboard(QWidget):
         sidebar_layout.addWidget(lbl_matricola)
         sidebar_layout.addWidget(lbl_corso)
 
-        # 2. GESTORE PAGINE
         self.stacked_widget = QStackedWidget()
         self.stacked_widget.setStyleSheet("background-color: #E0E0E0;")
 
@@ -158,9 +157,9 @@ class StudentDashboard(QWidget):
             active_button.setStyleSheet(
                 "background-color: #20B2AA; color: white; text-align: left; padding: 15px; border: none; font-weight: bold; border-radius: 5px;")
 
-
+    # ==========================
     # METODI DI SUPPORTO TABELLE
-
+    # ==========================
     def _crea_tabella_base(self, colonne):
         tabella = QTableWidget()
         tabella.setColumnCount(len(colonne))
@@ -175,9 +174,9 @@ class StudentDashboard(QWidget):
         item.setFlags(Qt.ItemFlag.ItemIsEnabled)
         tabella.setItem(riga, colonna, item)
 
-
-    # HOME
-
+    # ==========================
+    # PAGINA 0: HOME
+    # ==========================
     def _crea_pagina_home(self):
         page = QWidget()
         self.layout_home = QVBoxLayout(page)
@@ -219,8 +218,7 @@ class StudentDashboard(QWidget):
                     "background-color: white; border-radius: 5px; padding: 10px; color: black; border: 1px solid #ccc;")
 
                 card.clicked.connect(
-                    lambda id_m=corso['id_materia'], nome_m=corso['nome_materia']: self.apri_pagina_materiale(id_m,
-                                                                                                              nome_m))
+                    lambda id_m=corso['id_materia'], nome_m=corso['nome_materia']: self.apri_pagina_materiale(id_m, nome_m))
 
                 lo = QVBoxLayout(card)
                 lo.addWidget(QLabel(
@@ -231,9 +229,9 @@ class StudentDashboard(QWidget):
                     c = 0
                     r += 1
 
-
+    # ==========================
     # PAGINA 5: MATERIALE
-
+    # ==========================
     def _crea_pagina_materiale(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -340,9 +338,9 @@ class StudentDashboard(QWidget):
                 self.cambia_pagina(0, btn)
                 break
 
-
+    # ==========================
     # PAGINA 1: CORSI
-
+    # ==========================
     def _crea_pagina_corsi(self):
         page = QWidget()
         self.layout_corsi = QVBoxLayout(page)
@@ -400,9 +398,9 @@ class StudentDashboard(QWidget):
             QMessageBox.information(self, "Successo", "Iscrizione avvenuta con successo!")
             self.ricarica_pagina_corsi()
 
-
+    # ==========================
     # PAGINA 2: APPELLI
-
+    # ==========================
     def _crea_pagina_appelli(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -421,10 +419,21 @@ class StudentDashboard(QWidget):
         layout.addWidget(self.tabella_pren)
         return page
 
+    # --- MODIFICA 1: Sicurezza e Pulizia in ricarica_pagina_appelli ---
     def ricarica_pagina_appelli(self):
-        disp, pren = self.studente.get_appelli()
-        self.tabella_disp.setRowCount(len(disp))
+        try:
+            disp, pren = self.studente.get_appelli()
+        except Exception as e:
+            QMessageBox.critical(self, "Errore DB", f"Impossibile leggere gli appelli dal server.\nControlla di aver aggiornato il database!\nErrore: {e}")
+            return
 
+        # Pulisce le tabelle prima di aggiornarle per evitare crash della libreria grafica
+        self.tabella_disp.clearContents()
+        self.tabella_disp.setRowCount(0)
+        self.tabella_pren.clearContents()
+        self.tabella_pren.setRowCount(0)
+
+        self.tabella_disp.setRowCount(len(disp))
         for riga, app in enumerate(disp):
             self._inserisci_testo_cella(self.tabella_disp, riga, 0, app['materia'])
             self._inserisci_testo_cella(self.tabella_disp, riga, 1, app['gruppo'])
@@ -443,14 +452,17 @@ class StudentDashboard(QWidget):
             self._inserisci_testo_cella(self.tabella_pren, riga, 1, app['data'])
             self._inserisci_testo_cella(self.tabella_pren, riga, 2, app['ora'])
 
+    # --- MODIFICA 2: Sicurezza nel pulsante Prenota ---
     def _azione_prenota(self, id_appello):
         if self.studente.prenota_appello(id_appello):
             QMessageBox.information(self, "Successo", "Ti sei prenotato all'appello con successo!")
             self.ricarica_pagina_appelli()
+        else:
+            QMessageBox.warning(self, "Attenzione", "Impossibile prenotarsi.\n\nÈ possibile che l'appello abbia raggiunto la sua capacità massima o che tu sia già prenotato.")
 
-
+    # ==========================
     # PAGINA 3: LIBRETTO
-
+    # ==========================
     def _crea_pagina_libretto(self):
         page = QWidget()
         self.layout_libretto = QVBoxLayout(page)
@@ -575,15 +587,15 @@ class StudentDashboard(QWidget):
                 self.ricarica_pagina_libretto()
                 self.ricarica_pagina_home()
 
-
-    # PAGINA 4: IMPOSTAZIONI
-
+    # ==========================
+    # PAGINA 4: IMPOSTAZIONI (Restyling Fedele all'immagine)
+    # ==========================
     def _crea_pagina_impostazioni(self):
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(30, 30, 30, 30)
 
-
+        # Header Title and Logout Button
         header_layout = QHBoxLayout()
         lbl_titolo = QLabel("IMPOSTAZIONI GESTIONE PROFILO E APPLICAZIONE")
         lbl_titolo.setFont(QFont("Arial", 14, QFont.Weight.Bold))
@@ -600,12 +612,12 @@ class StudentDashboard(QWidget):
         layout.addLayout(header_layout)
         layout.addSpacing(40)
 
-
+        # Body Layout - Two Columns (Left: Password, Right: DSA)
         body_layout = QHBoxLayout()
 
-
-        # PASSWORD
-
+        # ==========================================
+        # LEFT COLUMN: PASSWORD
+        # ==========================================
         pwd_layout = QVBoxLayout()
         pwd_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
@@ -643,9 +655,9 @@ class StudentDashboard(QWidget):
         pwd_layout.addWidget(self.input_pwd_conferma)
         pwd_layout.addWidget(btn_salva_pwd)
 
-
-        # DSA
-
+        # ==========================================
+        # RIGHT COLUMN: DSA
+        # ==========================================
         dsa_layout = QVBoxLayout()
         dsa_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
@@ -669,7 +681,7 @@ class StudentDashboard(QWidget):
 
 
         body_layout.addLayout(pwd_layout, 1)
-        body_layout.addSpacing(60)  # Spazio al centro
+        body_layout.addSpacing(60)
         body_layout.addLayout(dsa_layout, 1)
 
         layout.addLayout(body_layout)
@@ -682,11 +694,11 @@ class StudentDashboard(QWidget):
         self.input_pwd_nuova.clear()
         self.input_pwd_conferma.clear()
 
-
+        # Recuperiamo il valore dalla classe OOP dello Studente
         stato_dsa = self.studente.dsa
 
         if stato_dsa is not None:
-
+            # DSA è già stato dichiarato in passato (1 = SI, 0 = NO)
             indice = 1 if stato_dsa == 1 else 2
             self.combo_dsa.setCurrentIndex(indice)
             self.combo_dsa.setEnabled(False)
@@ -697,7 +709,7 @@ class StudentDashboard(QWidget):
             self.btn_salva_dsa.setStyleSheet(
                 "background-color: #A9A9A9; color: white; padding: 10px; font-weight: bold; border-radius: 4px;")
         else:
-
+            # DSA non è mai stato dichiarato
             self.combo_dsa.setCurrentIndex(0)
             self.combo_dsa.setEnabled(True)
 
@@ -742,13 +754,13 @@ class StudentDashboard(QWidget):
             stato = 1 if scelta == "SI" else 0
 
             try:
-
+                # Salviamo il dato nel DB in maniera stabile
                 with sqlite3.connect(DB_PATH) as conn:
                     cur = conn.cursor()
                     cur.execute("UPDATE Studente SET DSA = ? WHERE ID_STUDENTE = ?", (stato, self.studente.id_utente))
                     conn.commit()
 
-
+                # Aggiorniamo la variabile locale dell'oggetto OOP
                 self.studente.dsa = stato
 
                 QMessageBox.information(self, "Successo", "Stato DSA aggiornato e registrato nel sistema con successo.")
